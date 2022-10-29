@@ -59,3 +59,6 @@
 
                     ~@matches-tests
                     )))))))))
+
+#?(:clj (defn read-eq-guard [form]
+          `(~'_ :guard (fn [x#] (= x# ~form)))))

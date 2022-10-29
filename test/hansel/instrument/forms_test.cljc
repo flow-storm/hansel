@@ -38,7 +38,7 @@
   :run-form (foo 5 6)
   :should-return 11
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id -1653360108, :form (_ :guard #(= % '(defn foo [a b] (+ a b)))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+  :tracing [[:trace-form-init {:form-id -1653360108, :form #eq-guard '(defn foo [a b] (+ a b)), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
             [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "foo", :fn-args [5 6], :form-id -1653360108} nil]
             [:trace-bind {:val 5, :coor nil, :symb 'a, :form-id -1653360108} nil]
             [:trace-bind {:val 6, :coor nil, :symb 'b, :form-id -1653360108} nil]
@@ -55,11 +55,11 @@
      :run-form (foo1 5 6)
      :should-return 11
      ;; :print-collected? true
-     :tracing [[:trace-form-init {:form-id 1367613401, :form (_ :guard #(= % '(defn foo1 [& args] (apply + args)))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
-               [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "foo1", :fn-args (_ :guard #(= % '[(5 6)])), :form-id 1367613401} nil]
-               [:trace-bind {:val (_ :guard #(= % '(5 6))), :coor nil, :symb 'args, :form-id 1367613401} nil]
+     :tracing [[:trace-form-init {:form-id 1367613401, :form #eq-guard '(defn foo1 [& args] (apply + args)), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+               [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "foo1", :fn-args  #eq-guard '[(5 6)], :form-id 1367613401} nil]
+               [:trace-bind {:val #eq-guard '(5 6) :coor nil, :symb 'args, :form-id 1367613401} nil]
                [:trace-expr-exec {:coor [3 1], :result _, :form-id 1367613401} nil]
-               [:trace-expr-exec {:coor [3 2], :result (_ :guard #(= % '(5 6))), :form-id 1367613401} nil]
+               [:trace-expr-exec {:coor [3 2], :result #eq-guard '(5 6), :form-id 1367613401} nil]
                [:trace-expr-exec {:coor [3], :result 11, :form-id 1367613401} nil]
                [:trace-fn-return {:return 11, :form-id 1367613401} nil]]))
 
@@ -69,7 +69,7 @@
   :run-form (foo2 5 6)
   :should-return 11
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id -1100750367, :form (_ :guard #(= % '(def foo2 (fn [a b] (+ a b))))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+  :tracing [[:trace-form-init {:form-id -1100750367, :form #eq-guard '(def foo2 (fn [a b] (+ a b))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
             [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "foo2", :fn-args [5 6], :form-id -1100750367} nil]
             [:trace-bind {:val 5, :coor nil, :symb 'a, :form-id -1100750367} nil]
             [:trace-bind {:val 6, :coor nil, :symb 'b, :form-id -1100750367} nil]
@@ -85,7 +85,7 @@
   :run-form (foo3 [1 2 3])
   :should-return [2 3 4]
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id -143162624, :form (_ :guard #(= % '(defn foo3 [xs] (->> xs (mapv (fn [i] (inc i))))))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+  :tracing [[:trace-form-init {:form-id -143162624, :form #eq-guard '(defn foo3 [xs] (->> xs (mapv (fn [i] (inc i))))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
             [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "foo3", :fn-args [[1 2 3]], :form-id -143162624} nil]
             [:trace-bind {:val [1 2 3], :coor nil, :symb 'xs, :form-id -143162624} nil]
             [:trace-expr-exec {:coor [3 1], :result [1 2 3], :form-id -143162624} nil]
@@ -115,7 +115,7 @@
   :run-form (bar 5)
   ;;:print-collected? true
   :should-return 15
-  :tracing [[:trace-form-init {:form-id -1955739707, :form (_ :guard #(= % '(defn bar ([a] (bar a 10)) ([a b] (+ a b))))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+  :tracing [[:trace-form-init {:form-id -1955739707, :form #eq-guard '(defn bar ([a] (bar a 10)) ([a b] (+ a b))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
             [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "bar", :fn-args [5], :form-id -1955739707} nil]
             [:trace-bind {:val 5, :coor nil, :symb 'a, :form-id -1955739707} nil]
             [:trace-expr-exec {:coor [2 1 1], :result 5, :form-id -1955739707} nil]
@@ -139,7 +139,7 @@
   :run-form (a-multi-method {:type :some-type :x 42})
   :should-return 42
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id 1944849841, :form (_ :guard #(= % '(defmethod a-multi-method :some-type [m] (:x m)))), :ns "hansel.instrument.forms-test", :def-kind :defmethod, :dispatch-val ":some-type"} nil]
+  :tracing [[:trace-form-init {:form-id 1944849841, :form #eq-guard '(defmethod a-multi-method :some-type [m] (:x m)), :ns "hansel.instrument.forms-test", :def-kind :defmethod, :dispatch-val ":some-type"} nil]
             [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "a-multi-method", :fn-args [{:type :some-type, :x 42}], :form-id 1944849841} nil]
             [:trace-bind {:val {:type :some-type, :x 42}, :coor nil, :symb 'm, :form-id 1944849841} nil]
             [:trace-expr-exec {:coor [4 1], :result {:type :some-type, :x 42}, :form-id 1944849841} nil]
@@ -159,12 +159,12 @@
   :run-form (+ (proto-fn-1 (->ARecord 5)) (proto-fn-2 (->ARecord 5)))
   :should-return 10
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id -1038078878, :form (_ :guard #(= % '(defrecord ARecord [n] FooP (proto-fn-1 [_] (inc n)) (proto-fn-2 [_] (dec n))))), :ns "hansel.instrument.forms-test", :def-kind :defrecord} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1"), :fn-args (_ :guard #(= % [(->ARecord 5)])), :form-id -1038078878} nil]
+  :tracing [[:trace-form-init {:form-id -1038078878, :form #eq-guard '(defrecord ARecord [n] FooP (proto-fn-1 [_] (inc n)) (proto-fn-2 [_] (dec n))), :ns "hansel.instrument.forms-test", :def-kind :defrecord} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1"), :fn-args #eq-guard [(->ARecord 5)], :form-id -1038078878} nil]
             [:trace-expr-exec {:coor [4 2 1], :result 5, :form-id -1038078878} nil]
             [:trace-expr-exec {:coor [4 2], :result 6, :form-id -1038078878} nil]
             [:trace-fn-return {:return 6, :form-id -1038078878} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args (_ :guard #(= % [(->ARecord 5)])), :form-id -1038078878} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args #eq-guard [(->ARecord 5)], :form-id -1038078878} nil]
             [:trace-expr-exec {:coor [5 2 1], :result 5, :form-id -1038078878} nil]
             [:trace-expr-exec {:coor [5 2], :result 4, :form-id -1038078878} nil]
             [:trace-fn-return {:return 4, :form-id -1038078878} nil]])
@@ -178,7 +178,7 @@
   :run-form (+ (proto-fn-1 (->AType 5)) (proto-fn-2 (->AType 5)))
   :should-return 10
   ;; :print-collected? true
-  :tracing  [[:trace-form-init {:form-id 279996188, :form (_ :guard #(= % '(deftype AType [n] FooP (proto-fn-1 [_] (inc n)) (proto-fn-2 [_] (dec n))))), :ns "hansel.instrument.forms-test", :def-kind :deftype} nil]
+  :tracing  [[:trace-form-init {:form-id 279996188, :form #eq-guard '(deftype AType [n] FooP (proto-fn-1 [_] (inc n)) (proto-fn-2 [_] (dec n))), :ns "hansel.instrument.forms-test", :def-kind :deftype} nil]
              [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1") :fn-args (_ :guard any?), :form-id 279996188} nil]
              [:trace-expr-exec {:coor [4 2 1], :result 5, :form-id 279996188} nil]
              [:trace-expr-exec {:coor [4 2], :result 6, :form-id 279996188} nil]
@@ -200,16 +200,16 @@
   :run-form (+ (proto-fn-1 (->BRecord 5)) (proto-fn-2 (->BRecord 5)))
   :should-return 10
 ;;  :print-collected? true
-  :tracing [[:trace-form-init {:form-id 969319502, :form (_ :guard #(= % '(extend-protocol FooP BRecord (proto-fn-1 [this] (inc (:n this))) (proto-fn-2 [this] (dec (:n this)))))), :ns "hansel.instrument.forms-test", :def-kind :extend-protocol} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1"), :fn-args [(_ :guard #(= % (->BRecord 5)))], :form-id 969319502} nil]
-            [:trace-bind {:val (_ :guard #(= % (->BRecord 5))), :coor nil, :symb 'this, :form-id 969319502} nil]
-            [:trace-expr-exec {:coor [3 2 1 1], :result (_ :guard #(= % (->BRecord 5))), :form-id 969319502} nil]
+  :tracing [[:trace-form-init {:form-id 969319502, :form #eq-guard '(extend-protocol FooP BRecord (proto-fn-1 [this] (inc (:n this))) (proto-fn-2 [this] (dec (:n this)))), :ns "hansel.instrument.forms-test", :def-kind :extend-protocol} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1"), :fn-args [#eq-guard (->BRecord 5)], :form-id 969319502} nil]
+            [:trace-bind {:val #eq-guard (->BRecord 5), :coor nil, :symb 'this, :form-id 969319502} nil]
+            [:trace-expr-exec {:coor [3 2 1 1], :result #eq-guard (->BRecord 5), :form-id 969319502} nil]
             [:trace-expr-exec {:coor [3 2 1], :result 5, :form-id 969319502} nil]
             [:trace-expr-exec {:coor [3 2], :result 6, :form-id 969319502} nil]
             [:trace-fn-return {:return 6, :form-id 969319502} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args [(_ :guard #(= % (->BRecord 5)))], :form-id 969319502} nil]
-            [:trace-bind {:val (_ :guard #(= % (->BRecord 5))), :coor nil, :symb 'this, :form-id 969319502} nil]
-            [:trace-expr-exec {:coor [4 2 1 1], :result (_ :guard #(= % (->BRecord 5))), :form-id 969319502} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args [#eq-guard (->BRecord 5)], :form-id 969319502} nil]
+            [:trace-bind {:val #eq-guard (->BRecord 5), :coor nil, :symb 'this, :form-id 969319502} nil]
+            [:trace-expr-exec {:coor [4 2 1 1], :result #eq-guard (->BRecord 5), :form-id 969319502} nil]
             [:trace-expr-exec {:coor [4 2 1], :result 5, :form-id 969319502} nil]
             [:trace-expr-exec {:coor [4 2], :result 4, :form-id 969319502} nil]
             [:trace-fn-return {:return 4, :form-id 969319502} nil]])
@@ -225,16 +225,16 @@
   :run-form (+ (proto-fn-1 (->CRecord 5)) (proto-fn-2 (->CRecord 5)))
   :should-return 10
   ;; :print-collected? true
-  :tracing [[:trace-form-init {:form-id -1521217400, :form (_ :guard #(= % '(extend-type CRecord FooP (proto-fn-1 [this] (inc (:n this))) (proto-fn-2 [this] (dec (:n this)))))), :ns "hansel.instrument.forms-test", :def-kind :extend-type} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1") :fn-args [(_ :guard #(= % (->CRecord 5)))], :form-id -1521217400} nil]
-            [:trace-bind {:val (_ :guard #(= % (->CRecord 5))), :coor nil, :symb 'this, :form-id -1521217400} nil]
-            [:trace-expr-exec {:coor [3 2 1 1], :result (_ :guard #(= % (->CRecord 5))), :form-id -1521217400} nil]
+  :tracing [[:trace-form-init {:form-id -1521217400, :form #eq-guard '(extend-type CRecord FooP (proto-fn-1 [this] (inc (:n this))) (proto-fn-2 [this] (dec (:n this)))), :ns "hansel.instrument.forms-test", :def-kind :extend-type} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-1" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_1$arity$1") :fn-args [#eq-guard (->CRecord 5)], :form-id -1521217400} nil]
+            [:trace-bind {:val #eq-guard (->CRecord 5), :coor nil, :symb 'this, :form-id -1521217400} nil]
+            [:trace-expr-exec {:coor [3 2 1 1], :result #eq-guard (->CRecord 5), :form-id -1521217400} nil]
             [:trace-expr-exec {:coor [3 2 1], :result 5, :form-id -1521217400} nil]
             [:trace-expr-exec {:coor [3 2], :result 6, :form-id -1521217400} nil]
             [:trace-fn-return {:return 6, :form-id -1521217400} nil]
-            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args [(_ :guard #(= % (->CRecord 5)))], :form-id -1521217400} nil]
-            [:trace-bind {:val (_ :guard #(= % (->CRecord 5))), :coor nil, :symb 'this, :form-id -1521217400} nil]
-            [:trace-expr-exec {:coor [4 2 1 1], :result (_ :guard #(= % (->CRecord 5))), :form-id -1521217400} nil]
+            [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name #?(:clj "proto-fn-2" :cljs "-hansel$instrument$forms-test$FooP$proto_fn_2$arity$1"), :fn-args [#eq-guard (->CRecord 5)], :form-id -1521217400} nil]
+            [:trace-bind {:val #eq-guard (->CRecord 5), :coor nil, :symb 'this, :form-id -1521217400} nil]
+            [:trace-expr-exec {:coor [4 2 1 1], :result #eq-guard (->CRecord 5), :form-id -1521217400} nil]
             [:trace-expr-exec {:coor [4 2 1], :result 5, :form-id -1521217400} nil]
             [:trace-expr-exec {:coor [4 2], :result 4, :form-id -1521217400} nil]
             [:trace-fn-return {:return 4, :form-id -1521217400} nil]])
@@ -269,7 +269,7 @@
                  nil)
      :should-return nil
      ;;:print-collected? true         
-     :tracing [[:trace-form-init {:form-id 1249185395, :form (_ :guard #(= % '(defn some-async-fn [] (let [in-ch (async/chan) out-ch (async/go (loop [] (when-some [x (async/<! in-ch)] x (recur))))] [in-ch out-ch])))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+     :tracing [[:trace-form-init {:form-id 1249185395, :form #eq-guard '(defn some-async-fn [] (let [in-ch (async/chan) out-ch (async/go (loop [] (when-some [x (async/<! in-ch)] x (recur))))] [in-ch out-ch])), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
                [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "some-async-fn", :fn-args [], :form-id 1249185395} nil]
                [:trace-expr-exec {:coor [3 1 1], :result (_ :guard async-chan?), :form-id 1249185395} nil]
                [:trace-bind {:val (_ :guard async-chan?), :coor [3], :symb 'in-ch, :form-id 1249185395} nil]
@@ -309,7 +309,7 @@
                  nil)
      :should-return nil
      ;; :print-collected? true
-     :tracing [[:trace-form-init {:form-id 352274237, :form (_ :guard #(= % '(defn some-other-async-fn [] (let [in-ch (async/chan) out-ch (async/go-loop [] (when-some [x (async/<! in-ch)] x (recur)))] [in-ch out-ch])))), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
+     :tracing [[:trace-form-init {:form-id 352274237, :form #eq-guard '(defn some-other-async-fn [] (let [in-ch (async/chan) out-ch (async/go-loop [] (when-some [x (async/<! in-ch)] x (recur)))] [in-ch out-ch])), :ns "hansel.instrument.forms-test", :def-kind :defn} nil]
                [:trace-fn-call {:ns "hansel.instrument.forms-test", :fn-name "some-other-async-fn", :fn-args [], :form-id 352274237} nil]
                [:trace-expr-exec {:coor [3 1 1], :result (_ :guard async-chan?), :form-id 352274237} nil]
                [:trace-bind {:val (_ :guard async-chan?), :coor [3], :symb 'in-ch, :form-id 352274237} nil]
