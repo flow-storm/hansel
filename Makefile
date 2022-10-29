@@ -4,10 +4,10 @@ clean:
 	clj -T:build clean
 
 test-clj:
-	clj -M:test-clj unit-clj
+	clj -M:test:test-clj unit-clj
 
 test-cljs:
-	rm .cljs_node_repl -rf; clj -M:test-cljs unit-cljs
+	rm .cljs_node_repl -rf; clj -M:test:test-cljs unit-cljs
 
 test-all: test-clj test-cljs
 

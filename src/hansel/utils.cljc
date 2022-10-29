@@ -1,4 +1,11 @@
-(ns hansel.utils)
+(ns hansel.utils
+  #?(:clj (:refer-clojure :exclude [format]))
+  #?(:cljs (:require [goog.string :as gstr]
+                     [goog.string.format])))
+
+(defn format [& args]
+  #?(:clj (apply clojure.core/format args)
+     :cljs (apply gstr/format args)))
 
 (defn merge-meta
 

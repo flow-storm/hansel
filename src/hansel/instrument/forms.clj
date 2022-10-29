@@ -343,13 +343,14 @@
   "Generates a collection of forms to trace `args-vec` symbols at `coor`.
   Used for tracing all arguments of a fn."
 
-  [args-vec coor ctx]
+  [args-vec ctx]
 
-  ;;TODO: SPEED: maybe we can have a trace that send all bindings together, instead
+  ;; SPEED: maybe we can have a trace that send all bindings together, instead
   ;; of one binding trace per argument.
 
+  ;; NOTE: Arguments bind trace coordinates are going to be always nil
   (->> args-vec
-       (keep (fn [symb] (bind-tracer symb coor ctx)))))
+       (keep (fn [symb] (bind-tracer symb nil ctx)))))
 
 (defn- expanded-fn-args-vec-symbols
 
@@ -449,7 +450,7 @@
                                                       :fn-name ~fn-trace-name
                                                       :fn-args ~(expanded-fn-args-vec-symbols arity-args-vec)}
                                       *runtime-ctx*)])
-                             (into (args-bind-tracers arity-args-vec form-coor ctx)))
+                             (into (args-bind-tracers arity-args-vec ctx)))
                          [])
 
         ctx' (-> ctx
@@ -739,6 +740,7 @@
                                  (if fn-form?
                                    (let [[_ set-field f-form] set!-form
                                          [_ _ fn-name] set-field]
+
                                      (if (str/starts-with? fn-name "-cljs$core")
                                        ;; don't instrument record types like ILookup, IKVReduce, etc
                                        set!-form
