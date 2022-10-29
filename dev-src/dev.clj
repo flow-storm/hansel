@@ -1,42 +1,53 @@
 (ns dev
-  (:require [hansel.instrument.forms :as inst-forms]
-            [hansel.instrument.namespaces :as inst-ns]
-            [hansel.instrument.runtime :as rt]))
+  (:require [hansel.api :as hansel]))
 
+(defn print-form-init [data ctx]
+  (println (format "[form-init] data: %s, ctx: %s" data ctx)))
 
-(defn print-form-init [data form rt-ctx]
-  (println (format "[form-init] data: %s, rt-ctx: %s, form: %s "
-                   data rt-ctx form)))
+(defn print-fn-call [data ctx]
+  (println (format "[fn-call] data: %s, ctx: %s" data ctx)))
 
-(defn print-fn-call [form-id ns fn-name args-vec rt-ctx]
-  (println (format "[fn-call] form-id: %s, ns: %s, fn-name: %s, args-vec: %s, rt-ctx: %s"
-                   form-id ns fn-name args-vec rt-ctx)))
+(defn print-fn-return [{:keys [return] :as data} ctx]
+  (println (format "[fn-return] data: %s, ctx: %s" data ctx))
+  return) ;; must return return!
 
-(defn print-expr-exec [result data rt-ctx]
-  (println (format "[expr-exec] result: %s, data: %s, rt-ctx: %s"
-                   result data rt-ctx))
-  result)
+(defn print-expr-exec [{:keys [result] :as data} ctx]
+  (println (format "[expr-exec] data: %s, ctx: %s" data ctx))
+  result) ;; must return result!
 
-(defn print-bind [symb val data rt-ctx]
-  (println (format "[bind] symb: %s, val: %s, data: %s, rt-ctx: %s"
-                   symb val data rt-ctx)))
-
-(def print-inst-config
-  {:trace-form-init 'dev/print-form-init
-   :trace-fn-call 'dev/print-fn-call
-   :trace-expr-exec 'dev/print-expr-exec
-   :trace-bind 'dev/print-bind})
-
-(defmacro i [form] (inst-forms/instrument print-inst-config form))
+(defn print-bind [data ctx]
+  (println (format "[bind] data: %s, ctx: %s" data ctx)))
 
 (comment
 
-  (inst-forms/instrument print-inst-config
-                         '(defn foo [a b] (+ a b)))
+  (hansel/instrument-form '{:trace-fn-call dev/print-fn-call
+                            :trace-fn-return dev/print-fn-return}
+                          '(defn foo [a b] (+ a b)))
 
-  (i (defn foo [a b] (- a b)))
+  ;; becareful with the quoting
+  (hansel/instrument {:trace-form-init dev/print-form-init
+                      :trace-fn-call dev/print-fn-call
+                      :trace-fn-return dev/print-fn-return
+                      :trace-expr-exec dev/print-expr-exec
+                      :trace-bind dev/print-bind}
+                     (defn foo [a b] (+ a b)))
 
-  (binding [rt/*runtime-ctx* {}]
-    (foo 2 3))
+  (foo 2 3)
 
+  (hansel/instrument {:trace-form-init dev/print-form-init
+                      :trace-fn-call dev/print-fn-call
+                      :trace-fn-return dev/print-fn-return
+                      :trace-expr-exec dev/print-expr-exec
+                      :trace-bind dev/print-bind}
+                     (defn factorial [n]
+                       (loop [i n
+                              r 1]
+                         (if (zero? i)
+                           r
+                           (recur ^{:trace/when (= i 2)} (dec i)
+                                  (* r i))))))
+
+
+  (hansel/with-ctx {:tracing-disabled? true}
+    (factorial 5))
   )

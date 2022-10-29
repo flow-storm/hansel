@@ -1,7 +1,8 @@
 {:paths ["src"]
  :deps {org.clojure/core.async      {:mvn/version "1.6.673"}
         org.clojure/tools.namespace {:mvn/version "1.2.0"}}
- :aliases {:dev {:extra-paths ["dev-src"]}
+ :aliases {:dev {:extra-paths ["dev-src"]
+                 :extra-deps {com.github.jpmonettas/flow-storm-dbg {:mvn/version "3.1.263"}}}
            :test-clj {:extra-paths ["test"]
                       :extra-deps {lambdaisland/kaocha {:mvn/version "1.70.1086"}}
                       :main-opts ["-m" "kaocha.runner"]}

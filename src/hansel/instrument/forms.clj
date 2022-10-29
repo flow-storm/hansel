@@ -327,15 +327,15 @@
 
   "Generates a form to trace a `symb` binding at `coor`."
 
-  [symb coor {:keys [disable trace-bind] :as ctx}]
+  [symb coor {:keys [trace-bind] :as ctx}]
 
-  (when-not (or (disable :binding)
+  (when-not (or (nil? trace-bind)
                 (uninteresting-symb? symb))
     `(~trace-bind
-      (quote ~symb)
-      ~symb
-      ~{:coor coor
-        :form-id (:form-id ctx)}
+      {:symb (quote ~symb)
+       :val ~symb
+       :coor ~coor
+       :form-id ~(:form-id ctx)}
       *runtime-ctx*)))
 
 (defn- args-bind-tracers
@@ -442,9 +442,15 @@
 
   [form-coor [arity-args-vec & arity-body-forms :as arity] {:keys [compiler fn-ctx outer-form-kind form-id form-ns disable excluding-fns trace-fn-call] :as ctx}]
   (let [fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
-        outer-preamble (-> []
-                           (into [`(~trace-fn-call ~form-id ~form-ns ~fn-trace-name ~(expanded-fn-args-vec-symbols arity-args-vec) *runtime-ctx*)])
-                           (into (args-bind-tracers arity-args-vec form-coor ctx)))
+        outer-preamble (if trace-fn-call
+                         (-> []
+                             (into [`(~trace-fn-call {:form-id ~form-id
+                                                      :ns ~form-ns
+                                                      :fn-name ~fn-trace-name
+                                                      :fn-args ~(expanded-fn-args-vec-symbols arity-args-vec)}
+                                      *runtime-ctx*)])
+                             (into (args-bind-tracers arity-args-vec form-coor ctx)))
+                         [])
 
         ctx' (-> ctx
                  (dissoc :fn-ctx)) ;; remove :fn-ctx so fn* down the road instrument as anonymous fns
@@ -618,16 +624,22 @@
 
   (with-meta (cons name (instrument-coll args ctx)) (meta form)))
 
-(defn- instrument-expression-form [form coor {:keys [form-id outer-form? disable trace-expr-exec]}]
-  ;; only disable :fn-call traces if it is NOT the outer form. we still want to
-  ;; trace outer forms since they are function returns
-  (if (and (disable :expr) (not outer-form?))
+(defn- instrument-expression-form [form coor {:keys [form-id outer-form? trace-expr-exec trace-fn-return]}]
+  (cond
 
-    form
+    (and trace-fn-return outer-form?)
+    `(~trace-fn-return {:return ~form
+                        :form-id ~form-id}
+      *runtime-ctx*) ;; trace-fn-return always evaluates to `form`
 
-    (let [trace-data (cond-> {:coor coor, :form-id form-id}
-                       outer-form? (assoc :outer-form? outer-form?))]
-      `(~trace-expr-exec ~form ~trace-data *runtime-ctx*))))
+    trace-expr-exec
+    `(~trace-expr-exec {:result ~form
+                        :coor ~coor
+                        :form-id ~form-id}
+      *runtime-ctx*) ;; trace-expr-exec always evaluates to `form`
+
+    :else
+    form))
 
 (defn- maybe-instrument
 
@@ -657,13 +669,13 @@
        :else form))))
 
 
-(defn- maybe-unwrap-outer-form-instrumentation [inst-form _]
+(defn- maybe-unwrap-outer-form-instrumentation [inst-form {:keys [trace-expr-exec]}]
   (if (and (seq? inst-form)
            (symbol? (first inst-form))
-           (= "trace-expr-exec" (-> inst-form first name)))
+           (= trace-expr-exec (first inst-form)))
 
-    ;; discard the trace-expr-exec
-    (second inst-form)
+    ;; unwrap the trace-expr-exec
+    (-> inst-form second :result)
 
     ;; else do nothing
     inst-form))
@@ -951,14 +963,16 @@
         inst-form-stripped (-> inst-form
                                (strip-instrumentation-meta)
                                (maybe-unwrap-outer-form-instrumentation ctx))]
-    `(do
-       (~trace-form-init ~(cond-> {:form-id form-id
-                                   :ns form-ns
-                                   :def-kind (:outer-form-kind ctx)}
-                            (= :defmethod (:outer-form-kind ctx)) (assoc :dispatch-val (-> ctx :fn-ctx :dispatch-val)))
-        '~orig-outer-form
-        ~*runtime-ctx*)
-       ~inst-form-stripped)))
+    (if trace-form-init
+      `(do
+         (~trace-form-init ~(cond-> {:form-id form-id
+                                     :form `'~orig-outer-form
+                                     :ns form-ns
+                                     :def-kind (:outer-form-kind ctx)}
+                              (= :defmethod (:outer-form-kind ctx)) (assoc :dispatch-val (-> ctx :fn-ctx :dispatch-val)))
+          ~*runtime-ctx*)
+         ~inst-form-stripped)
+      inst-form-stripped)))
 
 (defn- instrument-outer-form
   "Add some special instrumentation that is needed only on the outer form."
@@ -972,7 +986,7 @@
     :cljs
     :clj))
 
-(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind trace-form-init trace-fn-call trace-expr-exec]} form-ns form env]
+(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
   (let [form-id (hash form)
         compiler (compiler-from-env env)
         [macroexpand-1-fn expand-symbol] (case compiler
@@ -999,6 +1013,7 @@
 
      :trace-form-init trace-form-init
      :trace-fn-call trace-fn-call
+     :trace-fn-return trace-fn-return
      :trace-expr-exec trace-expr-exec
      :trace-bind trace-bind
 
@@ -1010,6 +1025,7 @@
   "Recursively instrument a form for tracing."
 
   [{:keys [env] :as config} form]
+
   (let [form-ns (or (:ns config) (str (ns-name *ns*)))
         {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form env)
         tagged-form (utils/tag-form-recursively form ::coor)

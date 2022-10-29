@@ -5,58 +5,84 @@ Instrument Clojure[Script] forms so they can be traced.
 Example :
 
 ```clojure
-(require '[hansel.instrument.forms :as inst-forms])
+(require '[hansel.api :as hansel]) ;; first require hansel api
 
-(defn print-form-init [data form rt-ctx]
-  (println (format "[form-init] data: %s, rt-ctx: %s, form: %s "
-                   data rt-ctx form)))
+;; Then define your "event handlers"
 
-(defn print-fn-call [form-id ns fn-name args-vec rt-ctx]
-  (println (format "[fn-call] form-id: %s, ns: %s, fn-name: %s, args-vec: %s, rt-ctx: %s"
-                   form-id ns fn-name args-vec rt-ctx)))
+(defn print-form-init [data ctx]
+  (println (format "[form-init] data: %s, ctx: %s" data ctx)))
 
-(defn print-expr-exec [result data rt-ctx]
-  (println (format "[expr-exec] result: %s, data: %s, rt-ctx: %s"
-                   result data rt-ctx))
-  result)
+(defn print-fn-call [data ctx]
+  (println (format "[fn-call] data: %s, ctx: %s" data ctx)))
 
-(defn print-bind [symb val data rt-ctx]
-  (println (format "[bind] symb: %s, val: %s, data: %s, rt-ctx: %s"
-                   symb val data rt-ctx)))
+(defn print-fn-return [{:keys [return] :as data} ctx]
+  (println (format "[fn-return] data: %s, ctx: %s" data ctx))
+  return) ;; must return return!
 
-(def print-inst-config
-  {:trace-form-init 'dev/print-form-init
-   :trace-fn-call 'dev/print-fn-call
-   :trace-expr-exec 'dev/print-expr-exec
-   :trace-bind 'dev/print-bind})
+(defn print-expr-exec [{:keys [result] :as data} ctx]
+  (println (format "[expr-exec] data: %s, ctx: %s" data ctx))
+  result) ;; must return result!
 
-;; hansel.instrument.forms/instrument can be called with any form to instrument it
+(defn print-bind [data ctx]
+  (println (format "[bind] data: %s, ctx: %s" data ctx)))
 
-(inst-forms/instrument print-inst-config
-                       '(defn foo [a b] (+ a b)))
+;; If you have any form as data you can instrument it with 
+;; hansel.api/instrument-form, providing the tracing handlers you
+;; are interested in. It will return the instrumented form
 
-;; you can wrap it on a macro and use it on your code
+(hansel/instrument-form '{:trace-fn-call dev/print-fn-call
+                          :trace-fn-return dev/print-fn-return}
+                        '(defn foo [a b] (+ a b)))
 
-(defmacro i [form] (inst-forms/instrument print-inst-config form))
+;; If you want to evaluate the instrumented fn also you
+;; have a convenience macro hansel.api/instrument also providing
+;; your tracing handlers
 
-(i (defn foo [a b] (- a b)))
+(hansel/instrument {:trace-form-init dev/print-form-init
+                    :trace-fn-call dev/print-fn-call
+                    :trace-fn-return dev/print-fn-return
+                    :trace-expr-exec dev/print-expr-exec
+                    :trace-bind dev/print-bind}
+                   (defn foo [a b] (+ a b)))
 
-;; after running the i macro you should immediately see on printed on *out*
+;; then you can call the function
 
-;; [form-init] data: {:form-id -1509256394, :ns "dev", :def-kind :defn}, rt-ctx: null, form: (defn foo [a b] (- a b)) 
-;; [expr-exec] result: #'dev/foo, data: {:coor [], :form-id -1509256394}, rt-ctx: null
-
-;; now if you call the function
 (foo 2 3)
 
-;; you should see also printed on out *out*
+;; and the repl should print :
 
-;; [fn-call] form-id: -1509256394, ns: dev, fn-name: foo, args-vec: [2 3], rt-ctx: null
-;; [bind] symb: a, val: 2, data: {:coor nil, :form-id -1509256394}, rt-ctx: null
-;; [bind] symb: b, val: 3, data: {:coor nil, :form-id -1509256394}, rt-ctx: null
-;; [expr-exec] result: 2, data: {:coor [3 1], :form-id -1509256394}, rt-ctx: null
-;; [expr-exec] result: 3, data: {:coor [3 2], :form-id -1509256394}, rt-ctx: null
-;; [expr-exec] result: -1, data: {:coor [3], :form-id -1509256394}, rt-ctx: null
-;; [expr-exec] result: -1, data: {:coor [], :form-id -1509256394, :outer-form? true}, rt-ctx: null
+;; [form-init] data: {:form-id -1653360108, :form (defn foo [a b] (+ a b)), :ns "dev", :def-kind :defn}, ctx: null
+;; [fn-call] data: {:ns "dev", :fn-name "foo", :fn-args [2 3], :form-id -1653360108}, ctx: null
+;; [bind] data: {:val 2, :coor nil, :symb a, :form-id -1653360108}, ctx: null
+;; [bind] data: {:val 3, :coor nil, :symb b, :form-id -1653360108}, ctx: null
+;; [expr-exec] data: {:coor [3 1], :result 2, :form-id -1653360108}, ctx: null
+;; [expr-exec] data: {:coor [3 2], :result 3, :form-id -1653360108}, ctx: null
+;; [expr-exec] data: {:coor [3], :result 5, :form-id -1653360108}, ctx: null
+;; [fn-return] data: {:return 5, :form-id -1653360108}, ctx: null
 ```
 
+Conditional tracing :
+
+```clojure
+(hansel/instrument {:trace-form-init dev/print-form-init
+                    :trace-fn-call dev/print-fn-call
+                    :trace-fn-return dev/print-fn-return
+                    :trace-expr-exec dev/print-expr-exec
+                    :trace-bind dev/print-bind}
+                   (defn factorial [n]
+                     (loop [i n
+                            r 1]
+                       (if (zero? i)
+                         r
+                         (recur ^{:trace/when (= i 2)} (dec i)
+                                                       (* r i))))))
+
+;; start with tracing disabled. It will be enabled/disabled depending on
+;; the :trace/when meta
+(hansel/with-ctx {:tracing-disabled? true}
+  (factorial 5))
+
+;; Your tracing handlers are going to be called every time but on your
+;; ctx you will have :tracing-disabled? to check
+
+```
