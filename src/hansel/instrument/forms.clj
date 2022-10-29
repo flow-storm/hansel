@@ -441,7 +441,7 @@
 
   "Instrument a (fn* ([] )) arity body. The core of functions body instrumentation."
 
-  [form-coor [arity-args-vec & arity-body-forms :as arity] {:keys [compiler fn-ctx outer-form-kind form-id form-ns disable excluding-fns trace-fn-call] :as ctx}]
+  [[arity-args-vec & arity-body-forms :as arity] {:keys [compiler fn-ctx outer-form-kind form-id form-ns disable excluding-fns trace-fn-call] :as ctx}]
   (let [fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
         outer-preamble (if trace-fn-call
                          (-> []
@@ -490,9 +490,8 @@
     (-> `(~arity-args-vec ~inst-arity-body-form)
         (utils/merge-meta (meta arity)))))
 
-(defn- instrument-special-fn* [[_ & args :as form] ctx]
+(defn- instrument-special-fn* [[_ & args] ctx]
   (let [[a1 & a1r] args
-        form-coor (-> form meta ::coor)
         [fn-name arities-bodies-seq] (cond
 
                                        ;; named fn like (fn* fn-name ([] ...) ([p1] ...))
@@ -509,7 +508,7 @@
         ctx (cond-> ctx
               (nil? (:fn-ctx ctx)) (assoc :fn-ctx {:trace-name fn-name
                                                    :kind :anonymous}))
-        instrumented-arities-bodies (map #(instrument-fn-arity-body form-coor % ctx) arities-bodies-seq)]
+        instrumented-arities-bodies (map #(instrument-fn-arity-body % ctx) arities-bodies-seq)]
 
     (if (nil? fn-name)
       `(~@instrumented-arities-bodies)
@@ -529,28 +528,26 @@
 
 (defn- instrument-special-reify* [[proto-or-interface-vec & methods] ctx]
   (let [inst-methods (->> methods
-                          (map (fn [[method-name args-vec & body :as form]]
-                                 (let [form-coor (-> form meta ::coor)
-                                       ctx (assoc ctx
+                          (map (fn [[method-name args-vec & body]]
+                                 (let [ctx (assoc ctx
                                                   :fn-ctx {:trace-name method-name
                                                            :kind :reify})
-                                       [_ inst-body] (instrument-fn-arity-body form-coor `(~args-vec ~@body) ctx)]
+                                       [_ inst-body] (instrument-fn-arity-body `(~args-vec ~@body) ctx)]
                                    `(~method-name ~args-vec ~inst-body)))))]
     `(~proto-or-interface-vec ~@inst-methods)))
 
 (defn- instrument-special-deftype*-clj [[a1 a2 a3 a4 a5 & methods] {:keys [outer-form-kind] :as ctx}]
   (let [inst-methods (->> methods
-                          (map (fn [[method-name args-vec & body :as form]]
+                          (map (fn [[method-name args-vec & body]]
                                  (if (and (= outer-form-kind :defrecord)
                                           (= "clojure.core" (namespace method-name)))
 
                                    ;; don't instrument defrecord types
                                    `(~method-name ~args-vec ~@body)
 
-                                   (let [form-coor (-> form meta ::coor)
-                                         ctx (assoc ctx :fn-ctx {:trace-name method-name
+                                   (let [ctx (assoc ctx :fn-ctx {:trace-name method-name
                                                                  :kind :extend-type})
-                                         [_ inst-body] (instrument-fn-arity-body form-coor `(~args-vec ~@body) ctx)]
+                                         [_ inst-body] (instrument-fn-arity-body `(~args-vec ~@body) ctx)]
                                      `(~method-name ~args-vec ~inst-body))))))]
     `(~a1 ~a2 ~a3 ~a4 ~a5 ~@inst-methods)))
 

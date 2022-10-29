@@ -1,9 +1,11 @@
 (ns hansel.instrument.test-utils
-  (:require [hansel.instrument.runtime]            
+  (:require [hansel.instrument.runtime]
+            [cljs.core.match :refer-macros [match]]
             #?@(:clj [[hansel.utils :as utils]
-                      [hansel.instrument.forms :as inst-forms]]
-                :cljs [[cljs.core.match :refer-macros [match]]])))
+                      [hansel.instrument.forms :as inst-forms]])))
 
+;; just for clj-kondo
+(comment match)
 (declare trace-form-init)
 (declare trace-fn-call)
 (declare trace-fn-return)
