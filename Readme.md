@@ -1,4 +1,9 @@
-Instrument Clojure[Script] forms so they can be traced.
+
+![hansel](./docs/hansel.png)
+
+Hansel leaving a trail o pebbles.
+
+Hansel allows you to instrument Clojure[Script] forms so they leave a trail when they run.
 
 [![Clojars Project](https://img.shields.io/clojars/v/com.github.jpmonettas/hansel.svg)](https://clojars.org/com.github.jpmonettas/hansel)
 
@@ -7,7 +12,7 @@ Example :
 ```clojure
 (require '[hansel.api :as hansel]) ;; first require hansel api
 
-;; Then define your "event handlers"
+;; Then define your "trace handlers"
 
 (defn print-form-init [data ctx]
   (println (format "[form-init] data: %s, ctx: %s" data ctx)))
