@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "ws": "^8.10.0"
+    "ws": "^8.10.0",
+	"shadow-cljs": "2.19.0"
   }
 }

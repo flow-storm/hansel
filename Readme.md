@@ -14,22 +14,22 @@ Example :
 
 ;; Then define your "trace handlers"
 
-(defn print-form-init [data ctx]
-  (println (format "[form-init] data: %s, ctx: %s" data ctx)))
+(defn print-form-init [data]
+  (println "[form-init] data:" data))
 
-(defn print-fn-call [data ctx]
-  (println (format "[fn-call] data: %s, ctx: %s" data ctx)))
+(defn print-fn-call [data]
+  (println "[fn-call] data:" data))
 
-(defn print-fn-return [{:keys [return] :as data} ctx]
-  (println (format "[fn-return] data: %s, ctx: %s" data ctx))
+(defn print-fn-return [{:keys [return] :as data}]
+  (println "[fn-return] data:" data)
   return) ;; must return return!
 
-(defn print-expr-exec [{:keys [result] :as data} ctx]
-  (println (format "[expr-exec] data: %s, ctx: %s" data ctx))
+(defn print-expr-exec [{:keys [result] :as data}]
+  (println "[expr-exec] data:" data)
   result) ;; must return result!
 
-(defn print-bind [data ctx]
-  (println (format "[bind] data: %s, ctx: %s" data ctx)))
+(defn print-bind [data]
+  (println "[bind] data: " data))
 
 ;; If you have any form as data you can instrument it with 
 ;; hansel.api/instrument-form, providing the tracing handlers you
@@ -56,14 +56,14 @@ Example :
 
 ;; and the repl should print :
 
-;; [form-init] data: {:form-id -1653360108, :form (defn foo [a b] (+ a b)), :ns "dev", :def-kind :defn}, ctx: null
-;; [fn-call] data: {:ns "dev", :fn-name "foo", :fn-args [2 3], :form-id -1653360108}, ctx: null
-;; [bind] data: {:val 2, :coor nil, :symb a, :form-id -1653360108}, ctx: null
-;; [bind] data: {:val 3, :coor nil, :symb b, :form-id -1653360108}, ctx: null
-;; [expr-exec] data: {:coor [3 1], :result 2, :form-id -1653360108}, ctx: null
-;; [expr-exec] data: {:coor [3 2], :result 3, :form-id -1653360108}, ctx: null
-;; [expr-exec] data: {:coor [3], :result 5, :form-id -1653360108}, ctx: null
-;; [fn-return] data: {:return 5, :form-id -1653360108}, ctx: null
+;; [form-init] data: {:form-id -1653360108, :form (defn foo [a b] (+ a b)), :ns "dev", :def-kind :defn}
+;; [fn-call] data: {:ns "dev", :fn-name "foo", :fn-args [2 3], :form-id -1653360108}
+;; [bind] data: {:val 2, :coor nil, :symb a, :form-id -1653360108}
+;; [bind] data: {:val 3, :coor nil, :symb b, :form-id -1653360108}
+;; [expr-exec] data: {:coor [3 1], :result 2, :form-id -1653360108}
+;; [expr-exec] data: {:coor [3 2], :result 3, :form-id -1653360108}
+;; [expr-exec] data: {:coor [3], :result 5, :form-id -1653360108}
+;; [fn-return] data: {:return 5, :form-id -1653360108}
 ```
 
 Conditional tracing :
@@ -87,7 +87,7 @@ Conditional tracing :
 (hansel/with-ctx {:tracing-disabled? true}
   (factorial 5))
 
-;; Your tracing handlers are going to be called every time but on your
-;; ctx you will have :tracing-disabled? to check
+;; Your tracing handlers are going to be called every time and hansel.instrument.runtime/*runtime-ctx*
+;; will contain :tracing-disabled? on each call
 
 ```

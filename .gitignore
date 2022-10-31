@@ -5,3 +5,4 @@ out
 .cljs_node_repl
 node_modules
 target
+.shadow-cljs

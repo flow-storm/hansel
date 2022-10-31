@@ -1,4 +1,4 @@
 {:linters
  {:unresolved-symbol
   {:exclude [(hansel.instrument.test-utils/def-instrumentation-test [_])]}}
- :output {:exclude-files ["test/data_readers.clj"]}}
+ :output {:exclude-files ["test/data_readers.clj" "test/hansel/instrument/tester.clj"]}}

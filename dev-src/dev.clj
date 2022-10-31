@@ -1,22 +1,23 @@
 (ns dev
-  (:require [hansel.api :as hansel]))
+  (:require [hansel.api :as hansel]
+            [hansel.instrument.runtime :refer [*runtime-ctx*]]))
 
-(defn print-form-init [data ctx]
-  (println (format "[form-init] data: %s, ctx: %s" data ctx)))
+(defn print-form-init [data]
+  (println "[form-init] data:" data ", ctx: " *runtime-ctx*))
 
-(defn print-fn-call [data ctx]
-  (println (format "[fn-call] data: %s, ctx: %s" data ctx)))
+(defn print-fn-call [data]
+  (println "[fn-call] data:" data ", ctx: " *runtime-ctx*))
 
-(defn print-fn-return [{:keys [return] :as data} ctx]
-  (println (format "[fn-return] data: %s, ctx: %s" data ctx))
+(defn print-fn-return [{:keys [return] :as data}]
+  (println "[fn-return] data:" data ", ctx: " *runtime-ctx*)
   return) ;; must return return!
 
-(defn print-expr-exec [{:keys [result] :as data} ctx]
-  (println (format "[expr-exec] data: %s, ctx: %s" data ctx))
+(defn print-expr-exec [{:keys [result] :as data}]
+  (println "[expr-exec] data:" data ", ctx: " *runtime-ctx*)
   result) ;; must return result!
 
-(defn print-bind [data ctx]
-  (println (format "[bind] data: %s, ctx: %s" data ctx)))
+(defn print-bind [data]
+  (println "[bind] data:" data ", ctx: " *runtime-ctx*))
 
 (comment
 
@@ -50,4 +51,25 @@
 
   (hansel/with-ctx {:tracing-disabled? true}
     (factorial 5))
+
+  (hansel/instrument-namespaces-clj #{"clojure.set"}
+                                    '{:trace-form-init dev/print-form-init
+                                      :trace-fn-call dev/print-fn-call
+                                      :trace-fn-return dev/print-fn-return
+                                      :trace-expr-exec dev/print-expr-exec
+                                      :trace-bind dev/print-bind
+                                      :uninstrument? false})
+
+  (h/instrument-namespaces-shadow-cljs
+   #{"clojure.set"}
+   '{:trace-form-init dev/print-form-init
+     :trace-fn-call dev/print-fn-call
+     :trace-fn-return dev/print-fn-return
+     :trace-expr-exec dev/print-expr-exec
+     :trace-bind dev/print-bind
+     :uninstrument? false
+     :build-id :browser-repl})
+
+  (require '[clojure.set :as s])
+  (s/difference #{1 2 3} #{2})
   )

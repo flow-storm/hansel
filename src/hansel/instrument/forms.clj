@@ -148,40 +148,6 @@
          (and (= a 'new)
               (= b 'clojure.lang.LazySeq)))))
 
-(defn- expanded-defmethod-form? [form {:keys [compiler]}]
-  (and (seq? form)
-       (or (and (= compiler :clj)
-                (= (count form) 5)
-                (= (nth form 2) 'clojure.core/addMethod))
-           (and (= compiler :cljs)
-                (= (count form) 4)
-                (= (first form) 'cljs.core/-add-method)))))
-
-(defn- expanded-clojure-core-extend-form? [[symb] _]
-  (= symb 'clojure.core/extend))
-
-(defn- expanded-deftype-form [form _]
-  (cond
-
-    (and (> (count form) 5)
-         (let [x (nth form 4)]
-           (and (seq? x) (= (first x) 'deftype*))))
-    :defrecord
-
-    (and (seq? form)
-         (>= (count form) 3)
-         (let [x (nth form 2)]
-           (and (seq? x) (= (first x) 'deftype*))))
-    :deftype
-
-    :else nil))
-
-(defn- expanded-extend-protocol-form? [form _]
-  (and (seq? form)
-       (= 'do (first form))
-       (seq? (second form))
-       (= 'clojure.core/extend (-> form second first))))
-
 (defn expanded-def-form? [form]
   (and (seq? form)
        (= (first form) 'def)))
@@ -211,17 +177,6 @@
              (and (seq? xset1) (seq? xset2)
                   (= (first xset1) 'set!)
                   (= (first xset2) 'set!)))))))
-
-(defn expanded-form-type [form ctx]
-  (when (seq? form)
-    (cond
-
-      (expanded-defn-form? form) :defn ;; this covers (defn foo [] ...), (def foo (fn [] ...)), and multy arities
-      (expanded-defmethod-form? form ctx) :defmethod
-      (or (expanded-clojure-core-extend-form? form ctx)
-          (expanded-deftype-form form ctx)) :extend-type
-      (expanded-extend-protocol-form? form ctx) :extend-protocol
-      (expanded-def-form? form) :def)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utitlities to recognize ClojureScript forms in their original version ;;
@@ -335,8 +290,7 @@
       {:symb (quote ~symb)
        :val ~symb
        :coor ~coor
-       :form-id ~(:form-id ctx)}
-      *runtime-ctx*)))
+       :form-id ~(:form-id ctx)})))
 
 (defn- args-bind-tracers
 
@@ -448,8 +402,7 @@
                              (into [`(~trace-fn-call {:form-id ~form-id
                                                       :ns ~form-ns
                                                       :fn-name ~fn-trace-name
-                                                      :fn-args ~(expanded-fn-args-vec-symbols arity-args-vec)}
-                                      *runtime-ctx*)])
+                                                      :fn-args ~(expanded-fn-args-vec-symbols arity-args-vec)})])
                              (into (args-bind-tracers arity-args-vec ctx)))
                          [])
 
@@ -627,14 +580,12 @@
 
     (and trace-fn-return outer-form?)
     `(~trace-fn-return {:return ~form
-                        :form-id ~form-id}
-      *runtime-ctx*) ;; trace-fn-return always evaluates to `form`
+                        :form-id ~form-id}) ;; trace-fn-return always evaluates to `form`
 
     trace-expr-exec
     `(~trace-expr-exec {:result ~form
                         :coor ~coor
-                        :form-id ~form-id}
-      *runtime-ctx*) ;; trace-expr-exec always evaluates to `form`
+                        :form-id ~form-id}) ;; trace-expr-exec always evaluates to `form`
 
     :else
     form))
@@ -962,16 +913,13 @@
         inst-form-stripped (-> inst-form
                                (strip-instrumentation-meta)
                                (maybe-unwrap-outer-form-instrumentation ctx))]
-    (if trace-form-init
-      `(do
-         (~trace-form-init ~(cond-> {:form-id form-id
-                                     :form `'~orig-outer-form
-                                     :ns form-ns
-                                     :def-kind (:outer-form-kind ctx)}
-                              (= :defmethod (:outer-form-kind ctx)) (assoc :dispatch-val (-> ctx :fn-ctx :dispatch-val)))
-          ~*runtime-ctx*)
-         ~inst-form-stripped)
-      inst-form-stripped)))
+    (cond-> {:inst-form inst-form-stripped}
+      trace-form-init (assoc :init-forms
+                             [`(~trace-form-init ~(cond-> {:form-id form-id
+                                                           :form `'~orig-outer-form
+                                                           :ns form-ns
+                                                           :def-kind (:outer-form-kind ctx)}
+                                                    (= :defmethod (:outer-form-kind ctx)) (assoc :dispatch-val (-> ctx :fn-ctx :dispatch-val))))]))))
 
 (defn- instrument-outer-form
   "Add some special instrumentation that is needed only on the outer form."

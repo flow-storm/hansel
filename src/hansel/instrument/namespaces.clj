@@ -2,8 +2,6 @@
   (:require [hansel.instrument.forms :as inst-forms]
             [hansel.utils :as utils]
             [clojure.string :as str]
-            [clojure.java.io :as io]
-            [clojure.set :as set]
             [clojure.tools.namespace.parse :as tools-ns-parse]
             [clojure.tools.namespace.file :as tools-ns-file]
             [clojure.tools.namespace.dependency :as tools-ns-deps]))
@@ -16,10 +14,10 @@
   excluding `excluding-ns`. If `prefixes?` is true, `ns-strs`
   will be used as prefixes, else a exact match will be required."
 
-  [ns-strs {:keys [excluding-ns prefixes?]}]
-  (->> (all-ns)
+  [ns-strs {:keys [excluding-ns prefixes? get-all-ns-fn] :as config}]
+  (->> (get-all-ns-fn config)
        (keep (fn [ns]
-               (let [nsname (str (ns-name ns))]
+               (let [nsname (str ns)]
                  (when (and (not (excluding-ns nsname))
                             (not (str/includes? nsname flow-storm-ns-tag))
                             (some (fn [ns-str]
@@ -27,7 +25,8 @@
                                       (str/starts-with? nsname ns-str)
                                       (= nsname ns-str)))
                                   ns-strs))
-                   ns))))))
+                   ns))))
+       doall))
 
 (defn ns-vars
 
@@ -35,6 +34,15 @@
 
   [ns]
   (vals (ns-interns ns)))
+
+(defn ns-vars-cljs
+
+  "Return all vars for a ClojureScript `ns`."
+
+  [ns-symb]
+  (let [ns-interns (requiring-resolve 'cljs.analyzer.api/ns-interns)]
+    (->> (ns-interns ns-symb)
+         keys)))
 
 (defn read-file-ns-decl
 
@@ -47,68 +55,15 @@
   [file]
   (tools-ns-file/read-file-ns-decl file))
 
-(defn interesting-files-for-namespaces
-
-  "Given a set of namespaces `ns-set` return a set of all files
-  used to load them."
-
-  [ns-set]
-  (reduce (fn [r ns]
-            (let [ns-vars (vals (ns-interns ns))]
-              (into r (keep (fn [v]
-                              (when-let [file (:file (meta v))]
-                                (or (io/resource file)
-                                    (.toURL (io/file file)))))
-                            ns-vars))))
-          #{}
-          ns-set))
-
-(defn- macroexpansion-error-data [ns form ex]
-  (let [e-msg (.getMessage ex)]
-    (cond
-      ;; Hard to fix, and there shouldn't be a lot of cases like that
-      (and (= (ns-name ns) 'cljs.core)
-           (str/includes? e-msg "macroexpanding resolve"))
-      {:type :known-error
-       :msg "ClojureScript macroexpanding resolve. core.cljs has a macro called resolve, and also some local fns shadowing resolve with a local fn. When applying clojure.walk/macroexpand-all or our inst-forms/macroexpand-all it doesn't work."}
-
-      :else
-      {:type :unknown-error
-       :ns (ns-name ns)
-       :form form
-       :msg e-msg})))
-
-(defn uninteresting-form?
+(defn interesting-form?
 
   "Predicate to check if a `form` is interesting to instrument."
 
-  [ns form]
+  [form _]
 
-  (or (nil? form)
-      (when (and (seq? form)
-                 (symbol? (first form)))
-        (contains? '#{"ns" "defmulti" "defprotocol" "defmacro" "comment" "import-macros"}
-                    (name (first form))))
-      (let [macro-expanded-form (try
-                                  (inst-forms/macroexpand-all macroexpand-1
-                                                              (fn [symb] (symbol (resolve symb)))
-                                                              form
-                                                              ::original-form)
-                                  (catch Exception e
-                                    (throw (ex-info "Error macroexpanding form" (macroexpansion-error-data ns form e)))))
-            kind (inst-forms/expanded-form-type macro-expanded-form {:compiler :clj})]
-        (not (contains? #{:defn :defmethod :extend-type :extend-protocol :def} kind)))))
-
-(defn expanded-defn-parse
-
-  "Given a `ns-name` and a `expanded-defn-form` (macroexpanded) returns
-  [fn-name-symbol fn-body]."
-
-  [ns-name expanded-defn-form]
-
-  (let [[_ var-name var-val] expanded-defn-form
-        var-symb (symbol ns-name (str var-name))]
-    [(find-var var-symb) var-val]))
+  (and (seq? form)
+       (when (symbol? (first form))
+         (not (#{"ns" "comment" "defprotocol"} (-> form first name))))))
 
 (defn eval-form-error-data [_ ex]
   (let [e-msg (.getMessage ex)]
@@ -122,12 +77,12 @@
       (and (.getCause ex) (str/includes? (.getMessage (.getCause ex)) "Must assign primitive to primitive mutable"))
       {:type :known-error
        :msg "Instrumenting (set! x ...) inside a deftype* being x a mutable primitive type confuses the compiler"
-       :retry-disabling #{:expr}}
+       :retry-disabling #{:trace-expr-exec}}
 
       (and (.getCause ex) (str/includes? (.getMessage (.getCause ex)) "Method code too large!"))
       {:type :known-error
        :msg "Instrumented expression is too large for the clojure compiler"
-       :retry-disabling #{:expr}}
+       :retry-disabling #{:trace-expr-exec}}
 
       :else
       (binding [*print-meta* true]
@@ -135,122 +90,91 @@
         #_(System/exit 1)
         {:type :unknown-error :msg e-msg}))))
 
-(defn instrument-and-eval-form
+(defn re-eval-form
 
-  "Instrument `form` and evaluates it under `ns`."
+  ([ns-symb form config] (re-eval-form ns-symb form config false))
 
-  ([ns form config] (instrument-and-eval-form ns form config false))
+  ([ns-symb form {:keys [uninstrument? eval-in-ns-fn] :as config} retrying?]
 
-  ([ns form config retrying?]
+   (let [{:keys [init-forms inst-form]}
+         (if uninstrument?
 
-   (let [inst-form (try
-                     (inst-forms/instrument (assoc config :ns (str (ns-name ns)))
-                                            form)
-                     (catch Exception e
-                       (.printStackTrace e)
-                       (throw (ex-info "Error instrumenting form" {:type :unknown-error
-                                                                   :msg (.getMessage e)}))))]
+           {:inst-form form :init-forms []}
+
+           (try
+
+             (binding [*ns* (find-ns ns-symb)]
+               (inst-forms/instrument (assoc config :ns (str ns-symb))
+                                      form))
+             (catch Exception e
+               (.printStackTrace e)
+               (throw (ex-info "Error instrumenting form" {:type :unknown-error
+                                                           :msg (.getMessage e)})))))
+         final-form `(do
+                       ~@init-forms
+                       ~inst-form)]
 
      (try
-       (cond
 
-         ;; if it is a defn, we swap the var fn*, so we keep the original meta
-         (inst-forms/expanded-defn-form? inst-form)
-         (let [[v vval] (expanded-defn-parse (str (ns-name ns)) inst-form)]
-           (alter-var-root v (fn [_] (eval vval))))
+       (eval-in-ns-fn ns-symb final-form config)
 
-         ;; for defs that aren't fn* we still want to evaluate them since they are maybe
-         ;; defining a instrumented function, and we want to update it
-         (inst-forms/expanded-def-form? inst-form)
-         (eval form)
-
-         ;; here we asume interesting forms kind like :defmethod, :extend-type, etc
-         :else
-         (eval inst-form))
        (catch Exception e
 
-         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data inst-form e)]
+         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data final-form e)]
            (if (and (not retrying?) retry-disabling)
              (do
                (when (:verbose? config)
                  (println (utils/colored-string (format "\n\nKnown error %s, retrying disabling %s for this form\n\n" msg retry-disabling)
-                                            :yellow)))
-               (instrument-and-eval-form ns form (assoc config :disable retry-disabling) true))
-             (throw (ex-info "Error evaluating form" error-data)))))))))
+                                                :yellow)))
+               (re-eval-form ns-symb form (apply dissoc config retry-disabling) true))
+             (throw (ex-info "Error evaluating form" (assoc error-data
+                                                            :original-form form
+                                                            :instrumented-form final-form))))))))))
 
-(defn- instrument-and-eval-file-forms
+(defn- re-eval-file-forms [ns-symb file-url {:keys [uninstrument? file-forms-fn verbose?] :as config}]
+  (let [file-forms (file-forms-fn ns-symb file-url config)]
 
-  "Instrument and evaluates all forms in `file-url`"
+    (println (format "\n%s namespace: %s Forms (%d) (%s)"
+                     (if uninstrument? "Uninstrumenting" "Instrumenting")
+                     ns-symb
+                     (count file-forms)
+                     (.getFile file-url)))
 
-  [ns-symb file-url {:keys [verbose?] :as config}]
-  ;; this is IMPORTANT, once we have `ns-symb` all the instrumentation work
-  ;; should be done as if we where in `ns-symb`
-  (binding [*ns* (find-ns ns-symb)]
-    (when-not (= ns-symb 'clojure.core) ;; we don't want to instrument clojure core since it brings too much noise
-      (let [ns (find-ns ns-symb)
-            file-forms (read-string {:read-cond :allow}
-                                    (format "[%s]" (slurp file-url)))]
-        (println (format "\nInstrumenting namespace: %s Forms (%d) (%s)" ns-symb (count file-forms) (.getFile file-url)))
-
-        (doseq [form file-forms]
-          (try
-
-            (if (uninteresting-form? ns form)
-
-              (print ".")
-
-              (do
-                (instrument-and-eval-form ns form config)
-                (print "I")))
-
-            (catch clojure.lang.ExceptionInfo ei
-              (let [e-data (ex-data ei)
-                    ex-type (:type e-data)
-                    ex-type-color (case ex-type
-                                    :known-error   :yellow
-                                    :unknown-error :red)]
-                (if verbose?
-                  (do
-                    (println)
-                    (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
-                    (println))
-
-                  ;; else, quiet mode
-                  (print (utils/colored-string "X" ex-type-color)))))))
-        (println)))))
-
-(defn- re-eval-file-forms [ns-symb file-url]
-  (binding [*ns* (find-ns ns-symb)]
-    (let [file-forms (read-string {:read-cond :allow}
-                                  (format "[%s]" (slurp file-url)))]
-      (println (format "\nUninstrumenting namespace: %s Forms (%d) (%s)" ns-symb (count file-forms) (.getFile file-url)))
-
+    ;; save all vars meta so we can restore it after
+    (let [ns-vars-meta (->> (vals (ns-interns (find-ns ns-symb)))
+                         (reduce (fn [r v]
+                                   (assoc r v (meta v)))
+                                 {}))]
       (doseq [form file-forms]
         (try
-          (let [mexpanded-form (inst-forms/macroexpand-all macroexpand-1
-                                                           (fn [symb] (symbol (resolve symb)))
-                                                           form
-                                                           ::original-form)]
 
-            (if (inst-forms/expanded-defn-form? mexpanded-form)
+          (if-not (interesting-form? form config)
 
-              ;; if it is a defn, we swap the var fn*, so we keep the original meta
-              (let [[v vval] (expanded-defn-parse (str (ns-name ns-symb)) mexpanded-form)]
-                (alter-var-root v (fn [_] (eval vval))))
+            (print ".")
 
-              ;; else just eval the form
+            (do
+              (re-eval-form ns-symb form config)
+              (print "I")))
 
-              (eval form)))
-          (catch Exception e
-            (println)
-            (println (utils/colored-string
-                      (format "Error uninstrumenting form %s" form)
-                      :red))
-            (println (utils/colored-string
-                      (.getMessage e)
-                      :red))
-            (println))))
-      (println))))
+          (catch clojure.lang.ExceptionInfo ei
+            (let [e-data (ex-data ei)
+                  ex-type (:type e-data)
+                  ex-type-color (case ex-type
+                                  :known-error   :yellow
+                                  :unknown-error :red)]
+              (if verbose?
+                (do
+                  (println)
+                  (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
+                  (println))
+
+                ;; else, quiet mode
+                (print (utils/colored-string "X" ex-type-color)))))))
+
+      ;; restore all var meta for the ns
+      (doseq [[v vmeta] ns-vars-meta]
+        (alter-meta! v (constantly vmeta))))
+    (println)))
 
 (defn instrument-files-for-namespaces
 
@@ -258,14 +182,11 @@
   `ns-strs`.
   If `prefixes?` is true, `ns-strs` will be used as prefixes, else a exact match will be required."
 
-  [ns-strs {:keys [prefixes?] :as config}]
+  [ns-strs {:keys [prefixes? files-for-ns-fn uninstrument?] :as config}]
 
   (let [{:keys [excluding-ns] :as config} (-> config
                                               (update :excluding-ns #(or % #{}))
                                               (update :disable #(or % #{})))
-        ns-set (all-namespaces ns-strs config)
-
-        files-set (interesting-files-for-namespaces ns-set)
         ns-pred (fn [nsname]
                   (and (not (excluding-ns nsname))
                        (some (fn [ns-str]
@@ -273,49 +194,65 @@
                                  (str/starts-with? nsname ns-str)
                                  (= nsname ns-str)))
                              ns-strs)))
-        all-ns-info (reduce (fn [r f]
-                              (let [ns-decl-form (read-file-ns-decl f)
-                                    ns-name (tools-ns-parse/name-from-ns-decl ns-decl-form)
-                                    deps (tools-ns-parse/deps-from-ns-decl ns-decl-form)]
-                                (if ns-name
-                                  (assoc r ns-name {:file f :deps (filter ns-pred deps)})
-                                  r)))
-                            {}
-                            files-set)
-        ns-graph (reduce (fn [g [ns-name {:keys [deps]}]]
+
+        ;; first filter all the known namespaces with the
+        ;; required namespaces predicate
+        ns-set (->> (all-namespaces ns-strs config)
+                    (filter #(ns-pred (str %)))
+                    (into #{}))
+
+        ;; a namespace could be defined in multiple files (like the clojure.pprint)
+        ;; so try to grab all the files related to the required `ns-set`.
+        ;; We also grab each file dependencies since we want to process them in
+        ;; topological order
+        namespaces-files-set (->> ns-set
+                                  (mapcat
+                                   (fn [ns-symb]
+                                     (->> (files-for-ns-fn ns-symb config)
+                                          (into #{})
+                                          (map (fn [file-url]
+                                                 (let [ns-decl-form (read-file-ns-decl file-url)
+                                                       deps (tools-ns-parse/deps-from-ns-decl ns-decl-form)]
+                                                   {:ns ns-symb
+                                                    :file file-url
+                                                    :deps (filter ns-pred deps)}))))))
+                                  (into #{}))
+
+        _ (println (format "Found %d namespaces matching the predicates, which leads to %d files that needs to be %s"
+                           (count ns-set)
+                           (count namespaces-files-set)
+                           (if uninstrument? "uninstrumented" "instrumented")))
+
+        ;; build the namespace dependency graph so we can
+        ;; sort them in topological order.
+        ;; namespaces with no dependencies will not be added to the graph
+        ;; since there is no way to do it
+        ns-graph (reduce (fn [g {:keys [ns deps]}]
                            (reduce (fn [gg dep-ns-name]
-                                     (tools-ns-deps/depend gg ns-name dep-ns-name))
+                                     (tools-ns-deps/depend gg ns dep-ns-name))
                                    g
                                    deps))
                          (tools-ns-deps/graph)
-                         all-ns-info)
+                         namespaces-files-set)
+
+        ns-symb->ns (group-by :ns namespaces-files-set)
+
         ;; all files that have dependencies between eachother that need to be
         ;; processed in topological order
-        dependent-files-vec (->> (tools-ns-deps/topo-sort ns-graph)
-                              (keep (fn [ns-symb]
-                                      (when-let [file (get-in all-ns-info [ns-symb :file])]
-                                        [ns-symb file])))
-                              (into []))
-        all-files-set (into #{} (map (fn [[ns-name {:keys [file]}]] [ns-name file]) all-ns-info))
-        independent-files (set/difference all-files-set
-                                          (into #{} dependent-files-vec))
+        topo-sorted-files (->> (tools-ns-deps/topo-sort ns-graph)
+                               (mapcat (fn [ns-symb] (get ns-symb->ns ns-symb)))
+                               (keep (fn [{:keys [file] :as ns-info}]
+                                       (when file
+                                         ns-info)))
+                               doall)
 
-        ;; vector of all files to be instrumented, sorted in dependency topological order
-        to-instrument-vec (into dependent-files-vec independent-files)
-        affected-namespaces (->> to-instrument-vec (map first) (into #{}))]
+        independent-files (filter #(empty? (:deps %)) namespaces-files-set)
 
-    #_(log (format "Dependent files in order : %s" dependent-files-vec))
-    #_(log (format "Independent files : %s" independent-files))
-    #_(log (format "To instrument : %s" to-instrument-vec))
+        files-to-be-instrumented (into topo-sorted-files independent-files)
 
-    (if (:uninstrument? config)
+        affected-namespaces (->> topo-sorted-files (map :ns) (into #{}))]
 
-      ;; uninstrument - re evaluate all file forms in reverse order
-      (doseq [[ns-symb file] (reverse to-instrument-vec)]
-        (re-eval-file-forms ns-symb file))
-
-      ;; instrument - evaluate all file instrumented forms
-      (doseq [[ns-symb file] to-instrument-vec]
-        (instrument-and-eval-file-forms ns-symb file config)))
+    (doseq [{:keys [ns file]} files-to-be-instrumented]
+      (re-eval-file-forms ns file config))
 
     affected-namespaces))

@@ -1,0 +1,10 @@
+;; shadow-cljs configuration
+{:source-paths
+ ["src" "dev-src"]
+
+ :dependencies
+ [[org.clojure/tools.namespace "1.2.0"]
+  [com.github.jpmonettas/flow-storm-dbg "3.1.263"]]
+
+ :builds
+ {}}

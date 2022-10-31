@@ -38,11 +38,11 @@
           (clojure.test/deftest ~tname
             (clojure.test/testing ~tdesc
               (let [~collected-traces-symb (atom [])]
-                (with-redefs [hansel.instrument.test-utils/trace-form-init (fn [data# rt-ctx#] (swap! ~collected-traces-symb conj [:trace-form-init data# rt-ctx#]))
-                              hansel.instrument.test-utils/trace-fn-call (fn [data# rt-ctx#] (swap! ~collected-traces-symb conj [:trace-fn-call data# rt-ctx#]) )
-                              hansel.instrument.test-utils/trace-fn-return (fn [data# rt-ctx#] (swap! ~collected-traces-symb conj [:trace-fn-return data# rt-ctx#]) (:return data#) )
-                              hansel.instrument.test-utils/trace-bind (fn [data# rt-ctx#] (swap! ~collected-traces-symb conj [:trace-bind data# rt-ctx#]))
-                              hansel.instrument.test-utils/trace-expr-exec (fn [data# rt-ctx#] (swap! ~collected-traces-symb conj [:trace-expr-exec data# rt-ctx#]) (:result data#))]
+                (with-redefs [hansel.instrument.test-utils/trace-form-init (fn [data#] (swap! ~collected-traces-symb conj [:trace-form-init data#]))
+                              hansel.instrument.test-utils/trace-fn-call (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-call data#]) )
+                              hansel.instrument.test-utils/trace-fn-return (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-return data#]) (:return data#))
+                              hansel.instrument.test-utils/trace-bind (fn [data#] (swap! ~collected-traces-symb conj [:trace-bind data#]))
+                              hansel.instrument.test-utils/trace-expr-exec (fn [data#] (swap! ~collected-traces-symb conj [:trace-expr-exec data#]) (:result data#))]
 
                   (instrument ~form)
                   
