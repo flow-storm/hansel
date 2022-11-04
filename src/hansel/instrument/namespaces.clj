@@ -131,7 +131,7 @@
                                                             :original-form form
                                                             :instrumented-form final-form))))))))))
 
-(defn- re-eval-file-forms [ns-symb file-url {:keys [uninstrument? file-forms-fn verbose?] :as config}]
+(defn- re-eval-file-forms [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
   (let [file-forms (file-forms-fn ns-symb file-url config)]
 
     (println (format "\n%s namespace: %s Forms (%d) (%s)"
@@ -140,11 +140,12 @@
                      (count file-forms)
                      (.getFile file-url)))
 
-    ;; save all vars meta so we can restore it after
-    (let [ns-vars-meta (->> (vals (ns-interns (find-ns ns-symb)))
-                         (reduce (fn [r v]
-                                   (assoc r v (meta v)))
-                                 {}))]
+    ;; for Clojure save all vars meta so we can restore it after
+    (let [ns-vars-meta (when (= :clj compiler)
+                         (->> (vals (ns-interns (find-ns ns-symb)))
+                              (reduce (fn [r v]
+                                        (assoc r v (meta v)))
+                                      {})))]
       (doseq [form file-forms]
         (try
 
@@ -171,9 +172,10 @@
                 ;; else, quiet mode
                 (print (utils/colored-string "X" ex-type-color)))))))
 
-      ;; restore all var meta for the ns
-      (doseq [[v vmeta] ns-vars-meta]
-        (alter-meta! v (constantly vmeta))))
+      ;; for Clojure restore all var meta for the ns
+      (when (= :clj compiler)
+        (doseq [[v vmeta] ns-vars-meta]
+          (alter-meta! v (constantly vmeta)))))
     (println)))
 
 (defn instrument-files-for-namespaces
@@ -250,7 +252,7 @@
 
         files-to-be-instrumented (into topo-sorted-files independent-files)
 
-        affected-namespaces (->> topo-sorted-files (map :ns) (into #{}))]
+        affected-namespaces (->> files-to-be-instrumented (map :ns) (into #{}))]
 
     (doseq [{:keys [ns file]} files-to-be-instrumented]
       (re-eval-file-forms ns file config))

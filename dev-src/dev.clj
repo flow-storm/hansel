@@ -58,18 +58,22 @@
                                       :trace-fn-return dev/print-fn-return
                                       :trace-expr-exec dev/print-expr-exec
                                       :trace-bind dev/print-bind
-                                      :uninstrument? false})
+                                      :prefixes? false
+                                      :uninstrument? true})
 
-  (h/instrument-namespaces-shadow-cljs
+
+  ;; For trying in shadow clojure repl
+  (require '[hansel.api :as hansel])
+  (hansel/instrument-namespaces-shadow-cljs
    #{"clojure.set"}
-   '{:trace-form-init dev/print-form-init
-     :trace-fn-call dev/print-fn-call
-     :trace-fn-return dev/print-fn-return
-     :trace-expr-exec dev/print-expr-exec
-     :trace-bind dev/print-bind
+   '{:trace-form-init cljs.user/print-form-init
+     :trace-fn-call cljs.user/print-fn-call
+     :trace-fn-return cljs.user/print-fn-return
+     :trace-expr-exec cljs.user/print-expr-exec
+     :trace-bind cljs.user/print-bind
      :uninstrument? false
      :build-id :browser-repl})
 
   (require '[clojure.set :as s])
-  (s/difference #{1 2 3} #{2})
+  (clojure.set/difference #{1 2 3} #{2})
   )

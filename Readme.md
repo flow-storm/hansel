@@ -91,3 +91,52 @@ Conditional tracing :
 ;; will contain :tracing-disabled? on each call
 
 ```
+
+Full Clojure namespaces instrumentation
+
+```clojure
+
+(hansel/instrument-namespaces-clj #{"clojure.set"}
+                                    '{:trace-form-init dev/print-form-init
+                                      :trace-fn-call dev/print-fn-call
+                                      :trace-fn-return dev/print-fn-return
+                                      :trace-expr-exec dev/print-expr-exec
+                                      :trace-bind dev/print-bind
+									  :prefixes? false
+                                      :uninstrument? false}) ;; <- you can use the same call with :uninstrument? true to uninstrument all namespaces
+									  
+(clojure.set/difference #{1 2 3} #{2})
+```
+
+Full ClojureScript namespaces instrumentation (shadow-cljs only)
+
+First start your shadow app :
+```
+rlwrap npx shadow-cljs browser-repl
+````
+
+On the ClojureScript side you need to define your handlers, so lets assume you have defined all your print-fns as before
+inside cljs.user namespace.
+
+On your shadow clj repl (you can connect to it via nRepl or by `npx shadow-cljs clj`) :
+```
+shadow.user> (require '[hansel.api :as hansel])
+
+;; instrument your namespaces providing the handlers you defined in the ClojureScript runtime side
+
+shadow.user> (hansel/instrument-namespaces-shadow-cljs
+                #{"clojure.set"}
+                '{:trace-form-init cljs.user/print-form-init
+                  :trace-fn-call cljs.user/print-fn-call
+                  :trace-fn-return cljs.user/print-fn-return
+                  :trace-expr-exec cljs.user/print-expr-exec
+                  :trace-bind cljs.user/print-bind
+                  :uninstrument? false
+                  :build-id :browser-repl}) ;; <- need to provide your shadow app build-id
+```
+
+Now go back to your ClojureScript repl and run :
+
+```
+cljs.user> (clojure.set/difference #{1 2 3} #{2})
+```
