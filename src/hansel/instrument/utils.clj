@@ -1,8 +1,11 @@
 (ns hansel.instrument.utils
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [clojure.walk :as walk]
             [hansel.utils :as utils])
   (:import [java.io StringReader]))
+
+(declare macroexpand-all)
 
 (defn get-all-ns-fn-clj [_] (map ns-name (all-ns)))
 
@@ -62,3 +65,179 @@
                    (.toURL (io/file file-name))))]
     (when file
       [file])))
+
+(defn compiler-from-env [env]
+  (if (contains? env :js-globals)
+    :cljs
+    :clj))
+
+(defn strip-meta
+
+  "Strip meta from form.
+  If keys are provided, strip only those keys."
+
+  ([form] (strip-meta form nil))
+  ([form keys]
+   (if (and (instance? clojure.lang.IObj form)
+            (meta form))
+     (if keys
+       (with-meta form (apply dissoc (meta form) keys))
+       (with-meta form nil))
+     form)))
+
+(defn listy?
+  "Returns true if x is any kind of list except a vector."
+  [x]
+  (and (sequential? x) (not (vector? x))))
+
+(defn- macroexpand+
+
+  "A macroexpand version that support custom `macroexpand-1-fn`"
+
+  [macroexpand-1-fn form]
+
+  (let [ex (if (seq? form)
+             (macroexpand-1-fn form)
+             form)]
+    (if (identical? ex form)
+      form
+      (macroexpand+ macroexpand-1-fn ex))))
+
+(defn- core-async-go-loop-form? [expand-symbol form]
+  (and (seq? form)
+       (let [[x] form]
+         (and
+          (symbol? x)
+          (= "go-loop" (name x))
+          (#{'clojure.core.async/go-loop 'cljs.core.async/go-loop}  (expand-symbol x))))))
+
+(defn- macroexpand-core-async-go [macroexpand-1-fn expand-symbol form original-key]
+  `(clojure.core.async/go ~@(map #(macroexpand-all macroexpand-1-fn expand-symbol % original-key) (rest form))))
+
+(defn walk-unquoted
+  "Traverses form, an arbitrary data structure.  inner and outer are
+  functions.  Applies inner to each element of form, building up a
+  data structure of the same type, then applies outer to the result.
+  Recognizes all Clojure data structures. Consumes seqs as with doall.
+
+  Unlike clojure.walk/walk, does not traverse into quoted forms."
+  [inner outer form]
+  (if (and (listy? form) (= (first form) 'quote))
+    (outer form)
+    (walk/walk inner outer form)))
+
+(defn core-async-go-form? [expand-symbol form]
+  (and (seq? form)
+       (let [[x] form]
+         (and
+          (symbol? x)
+          (= "go" (name x))
+          (#{'clojure.core.async/go 'cljs.core.async/go}  (expand-symbol x))))))
+
+(defn parse-defn-expansion [defn-expanded-form]
+  ;; (def my-fn (fn* ([])))
+  (let [[_ var-name & fn-arities-bodies] defn-expanded-form]
+    {:var-name var-name
+     :fn-arities-bodies fn-arities-bodies}))
+
+(defn macroexpand-all
+
+  "Like `clojure.walk/macroexpand-all`, but preserves metadata.
+  Also store the original form (unexpanded and stripped of
+  metadata) in the metadata of the expanded form under original-key."
+
+  [macroexpand-1-fn expand-symbol form & [original-key]]
+
+  (cond
+    (core-async-go-form? expand-symbol form)
+    (macroexpand-core-async-go macroexpand-1-fn expand-symbol form original-key)
+
+    (core-async-go-loop-form? expand-symbol form)
+    (macroexpand-all macroexpand-1-fn expand-symbol (macroexpand-1 form) original-key)
+
+    :else
+    (let [md (meta form)
+          expanded (walk-unquoted #(macroexpand-all macroexpand-1-fn expand-symbol % original-key)
+                                  identity
+                                  (if (and (seq? form)
+                                           (not= (first form) 'quote))
+                                    ;; Without this, `macroexpand-all`
+                                    ;; throws if called on `defrecords`.
+                                    (try (let [r (macroexpand+ macroexpand-1-fn form)]
+                                           r)
+                                         (catch ClassNotFoundException _ form))
+                                    form))
+          expanded-with-meta (utils/merge-meta expanded
+                               md
+                               (when original-key
+                                 ;; We have to quote this, or it will get evaluated by
+                                 ;; Clojure (even though it's inside meta).
+                                 {original-key (list 'quote (strip-meta form))}))]
+
+      expanded-with-meta)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utilities to recognize forms in their macroexpanded forms ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn expanded-lazy-seq-form?
+
+  "Returns true if `form` is the expansion of (lazy-seq ...)"
+
+  [form]
+
+  (and (seq? form)
+       (let [[a b] form]
+         (and (= a 'new)
+              (= b 'clojure.lang.LazySeq)))))
+
+(defn expanded-defn-form? [form]
+  (and (= (count form) 3)
+       (= 'def (first form))
+       (let [[_ _ x] form]
+         (and (seq? x)
+              (= (first x) 'fn*)))))
+
+(defn expanded-cljs-multi-arity-defn? [[x1 & xs] _]
+  (when (= x1 'do)
+    (let [[_ & xset] (keep first xs)]
+      (and (expanded-defn-form? (first xs))
+           (pos? (count xset))
+           (every? #{'set! 'do}
+                   (butlast xset))))))
+
+(defn expanded-cljs-variadic-defn? [form]
+  (when (seq? form)
+    (let [[x1 x2 x3] form]
+      (and (= x1 'do)
+           (expanded-defn-form? x2)
+           (seq? x3)
+           (let [[_ xset1 xset2] x3]
+             (and (seq? xset1) (seq? xset2)
+                  (= (first xset1) 'set!)
+                  (= (first xset2) 'set!)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utitlities to recognize ClojureScript forms in their original version ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn- original-form-first-symb-name [form]
+  (when (seq? form)
+    (some-> form
+            meta
+            :hansel.instrument.forms/original-form
+            rest
+            ffirst
+            name)))
+
+(defn cljs-extend-type-form-types? [form _]
+  (and (= "extend-type" (original-form-first-symb-name form))
+       (every? (fn [[a0]]
+                 (= 'set! a0))
+               (rest form))))
+
+(defn cljs-extend-type-form-basic? [form _]
+  (and (= "extend-type" (original-form-first-symb-name form))
+       (every? (fn [[a0]]
+                 (= 'js* a0))
+               (rest form))))

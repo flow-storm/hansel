@@ -4,8 +4,8 @@
             [clojure.java.io :as io]
             [hansel.instrument.tester :as tester]
             [clojure.test :refer [deftest is testing] :as t]
-            [shadow.cljs.devtools.api :as shadow]
-            [shadow.cljs.devtools.server :as shadow-server]))
+            #_[shadow.cljs.devtools.api :as shadow]
+            #_[shadow.cljs.devtools.server :as shadow-server]))
 
 
 (declare trace-form-init)
