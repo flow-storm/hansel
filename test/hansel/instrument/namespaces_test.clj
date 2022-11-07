@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [hansel.instrument.tester :as tester]
             [clojure.test :refer [deftest is testing] :as t]
+            [clojure.set :as set]
             #_[shadow.cljs.devtools.api :as shadow]
             #_[shadow.cljs.devtools.server :as shadow-server]))
 
@@ -17,6 +18,44 @@
 (defn cljs-main [& args]
     (with-redefs [clojure.core/shutdown-agents (fn [] nil)]
       (apply cljs-main/-main args)))
+
+(deftest instrument-var-clj
+  (let [trace-count (atom 0)
+        inst-config `{:trace-form-init trace-form-init
+                      :trace-fn-call trace-fn-call
+                      :trace-fn-return trace-fn-return
+                      :trace-expr-exec trace-expr-exec
+                      :trace-bind trace-bind}]
+    (testing "Clojure var instrumentation/uninstrumentation"
+      (with-redefs [trace-form-init (fn [_] (swap! trace-count inc))
+                    trace-fn-call (fn [_] (swap! trace-count inc) )
+                    trace-fn-return (fn [data] (swap! trace-count inc) (:return data))
+                    trace-bind (fn [_] (swap! trace-count inc))
+                    trace-expr-exec (fn [data] (swap! trace-count inc) (:result data))]
+
+        ;; instrument first time
+        (hansel/instrument-var-clj 'clojure.set/difference inst-config)
+        ;; call the instrumented function
+        (set/difference #{1 2 3} #{2})
+
+        (is (= 15 @trace-count) "Instrumented var should generate traces")
+
+        ;; UNinstrument
+        (hansel/instrument-var-clj 'clojure.set/difference {:uninstrument? true})
+        ;; call the UNinstrumented function
+        (set/difference #{1 2 3} #{2})
+
+        (is (= 15 @trace-count) "Uninstrumented var should NOT generate traces")
+
+        ;; Instrument again (to check we didn't lost anything and we can do this indefinetly)
+        (hansel/instrument-var-clj 'clojure.set/difference inst-config)
+        ;; call the instrumented function
+        (set/difference #{1 2 3} #{2})
+
+        (is (= 30 @trace-count) "Re instrumented var should generate traces")
+
+        ;; finally leave the fn uninstrumented
+        (hansel/instrument-var-clj 'clojure.set/difference {:uninstrument? true})))))
 
 (deftest clojure-full-tester-namespace-instrumentation
   (testing "Full tester namespaces instrumentation"

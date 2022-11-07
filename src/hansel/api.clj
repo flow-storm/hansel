@@ -2,7 +2,8 @@
   (:require [hansel.instrument.forms :as inst-forms]
             [hansel.instrument.namespaces :as inst-ns]
             [hansel.instrument.utils :as inst-utils]
-            [hansel.instrument.runtime :as rt]))
+            [hansel.instrument.runtime :as rt]
+            [clojure.repl :as clj.repl]))
 
 (def instrument-form inst-forms/instrument)
 
@@ -23,6 +24,27 @@
    :file-forms-fn inst-utils/file-forms-fn-cljs
    :files-for-ns-fn inst-utils/files-for-ns-fn-cljs
    :compiler :cljs})
+
+(defn instrument-var-clj [var-symb config]
+  (let [ns-symb (symbol (namespace var-symb))
+        form-ns (find-ns ns-symb)]
+    (binding [*ns* form-ns]
+      (let [form (some->> (clj.repl/source-fn var-symb)
+                          (read-string {:read-cond :allow}))]
+        (if form
+
+          (let [v (find-var var-symb)
+                vmeta (meta v)] ;; save the var meta
+            (inst-ns/re-eval-form ns-symb form (merge clj-namespaces-config config))
+
+            ;; restore the var meta
+            (alter-meta! v (constantly vmeta)))
+
+          (println (format "Couldn't find source for %s" var-symb)))))))
+
+(defn instrument-var-shadow-cljs []
+  )
+
 
 (defn instrument-namespaces-clj [ns-prefixes config]
   (inst-ns/instrument-files-for-namespaces ns-prefixes

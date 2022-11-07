@@ -76,4 +76,12 @@
 
   (require '[clojure.set :as s])
   (clojure.set/difference #{1 2 3} #{2})
+  (hansel/instrument-var-clj
+   'clojure.set/difference
+   '{:trace-form-init dev/print-form-init
+     :trace-fn-call dev/print-fn-call
+     :trace-fn-return dev/print-fn-return
+     :trace-expr-exec dev/print-expr-exec
+     :trace-bind dev/print-bind
+     :uninstrument? false})
   )

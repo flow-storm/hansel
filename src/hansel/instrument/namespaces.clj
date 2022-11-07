@@ -131,7 +131,7 @@
                                                             :original-form form
                                                             :instrumented-form final-form))))))))))
 
-(defn- re-eval-file-forms [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
+(defn re-eval-file-forms [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
   (let [file-forms (file-forms-fn ns-symb file-url config)]
 
     (println (format "\n%s namespace: %s Forms (%d) (%s)"

@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [hansel.utils :as utils])
-  (:import [java.io StringReader]))
+  (:import [java.io StringReader LineNumberReader InputStreamReader PushbackReader]
+           [clojure.lang RT]))
 
 (declare macroexpand-all)
 
@@ -175,6 +176,33 @@
                                  {original-key (list 'quote (strip-meta form))}))]
 
       expanded-with-meta)))
+
+(defn source-fn
+
+  "Like clojure.repl/source-fn but looks for the source using :file meta first
+  as a resource and then on the filesystem."
+
+  [x]
+  (try
+    (when-let [v (resolve x)]
+      (when-let [filepath (:file (meta v))]
+        (let [strm (or (.getResourceAsStream (RT/baseLoader) filepath)
+                       (io/input-stream filepath))]
+          (when str
+            (with-open [rdr (LineNumberReader. (InputStreamReader. strm))]
+              (dotimes [_ (dec (:line (meta v)))] (.readLine rdr))
+              (let [text (StringBuilder.)
+                    pbr (proxy [PushbackReader] [rdr]
+                          (read [] (let [i (proxy-super read)]
+                                     (.append text (char i))
+                                     i)))
+                    read-opts (if (.endsWith ^String filepath "cljc") {:read-cond :allow} {})]
+                (if (= :unknown *read-eval*)
+                  (throw (IllegalStateException. "Unable to read source while *read-eval* is :unknown."))
+                  (read read-opts (PushbackReader. pbr)))
+                (str text))
+              )))))
+    (catch Exception _ nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities to recognize forms in their macroexpanded forms ;;
