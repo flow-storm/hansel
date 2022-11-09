@@ -42,7 +42,13 @@
 
           (println (format "Couldn't find source for %s" var-symb)))))))
 
-(defn instrument-var-shadow-cljs []
+(defn instrument-var-shadow-cljs [var-symb {:keys [build-id] :as config}]
+  (throw (ex-info "Not implemented" {}))
+  ;; TODO: figure out how to retrieve the env for the shadow build-id
+  #_(let [source-fn (requiring-resolve 'cljs.repl/source-fn)
+        env nil
+        form (source-fn &env symb)]
+    )
   )
 
 
