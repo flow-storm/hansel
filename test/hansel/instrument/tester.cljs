@@ -43,24 +43,15 @@
 (defn boo [xs]
   (let [a 25
         yy (other-function 4 5)
-        hh (range)
-        *a (atom 10)
-        _ (swap! *a inc)
-        xx @*a
         b (+ a 4)
-        m ^{:meta1 true :meta2 "nice-meta-value"} {:a 5 :b ^:interesting-vector [1 2 3]}
+        m {:a 5 :b [1 2 3]}
         mm (assoc m :c 10)
         c (+ a b 7)
         d (add (->ARecord 5))
-        j (loop [i 100
-                 sum 0]
-            (if (> i 0)
-              (recur (dec i) (+ sum i))
-              sum))]
-
-    (->> xs
-         (map (fn [x] (+ 1 (do-it x))))
-         (reduce + )
-         add
-         sub
-         (+ c d j))))
+        sum (->> xs
+                 (map (fn [x] (+ 1 (do-it x))))
+                 (reduce + ))
+        after-add (add sum)
+        after-sub (sub after-add)
+        final (+ c d)]
+    final))

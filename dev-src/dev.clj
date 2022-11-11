@@ -65,7 +65,7 @@
   ;; For trying in shadow clojure repl
   (require '[hansel.api :as hansel])
   (hansel/instrument-namespaces-shadow-cljs
-   #{"clojure.set"}
+   #{"hansel.instrument.tester"}
    '{:trace-form-init dev/print-form-init
      :trace-fn-call dev/print-fn-call
      :trace-fn-return dev/print-fn-return

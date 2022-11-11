@@ -1,6 +1,6 @@
 ;; shadow-cljs configuration
 {:source-paths
- ["src" "dev-src"]
+ ["src" "dev-src" "test"]
 
  :dependencies
  [[org.clojure/tools.namespace "1.2.0"]

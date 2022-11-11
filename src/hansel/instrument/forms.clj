@@ -198,20 +198,29 @@
           inst-body)))
 
 (defn- instrument-extend-type-fn-arity-body [arity-body-forms outer-preamble form-ns fn-trace-name ctx]
-  ;; All this nonsense is because inside type functions `this` behaves weirdly
-  ;; This       : (fn* ([this] (do (println (js* "this"))))) prints the type object
-  ;; while this : (fn* ([this] (+ 2 (do (println (js* "this")) 3)))) prints the window object on the browser
-  ;;
-  ;; Because of that, we can't instrument extend-type fn bodies normally and need to move the `this` binding
-  ;; to the outside
-  (let [[_ _ & this-inner-forms] (first arity-body-forms)
-        inst-this-inner (instrument-outer-form ctx
-                                               (instrument-coll this-inner-forms ctx)
-                                               outer-preamble
-                                               form-ns
-                                               fn-trace-name)]
-    `(let* [~'this (~'js* "this")]
-       ~inst-this-inner)))
+  (if (:extending-basic-type? ctx)
+    ;; Extending a basic type (number, string, ...)
+    (instrument-outer-form ctx
+                           (instrument-coll arity-body-forms ctx)
+                           outer-preamble
+                           form-ns
+                           fn-trace-name)
+
+    ;; Else we are extending a user defined type
+    ;; All this nonsense is because inside type functions `this` behaves weirdly
+    ;; This       : (fn* ([this] (do (println (js* "this"))))) prints the type object
+    ;; while this : (fn* ([this] (+ 2 (do (println (js* "this")) 3)))) prints the window object on the browser
+    ;;
+    ;; Because of that, we can't instrument extend-type fn bodies normally and need to move the `this` binding
+    ;; to the outside
+    (let [[_ _ & this-inner-forms] (first arity-body-forms)
+          inst-this-inner (instrument-outer-form ctx
+                                                 (instrument-coll this-inner-forms ctx)
+                                                 outer-preamble
+                                                 form-ns
+                                                 fn-trace-name)]
+      `(let* [~'this (~'js* "this")]
+         ~inst-this-inner))))
 
 (defn- instrument-fn-arity-body
 
@@ -283,7 +292,7 @@
         ctx (cond-> ctx
               (nil? (:fn-ctx ctx)) (assoc :fn-ctx {:trace-name fn-name
                                                    :kind :anonymous}))
-        instrumented-arities-bodies (map #(instrument-fn-arity-body % ctx) arities-bodies-seq)]
+        instrumented-arities-bodies (mapv #(instrument-fn-arity-body % ctx) arities-bodies-seq)]
 
     (if (nil? fn-name)
       `(~@instrumented-arities-bodies)
@@ -488,8 +497,12 @@
         inst-code `(do ~xdef ~@inst-sets-forms)]
     inst-code))
 
-(defn- instrument-cljs-extend-type-form-basic [[_ & js*-list] ctx]
-  (let [inst-sets-forms (map (fn [[_ _ _ _ x :as js*-form]]
+(defn- instrument-cljs-extend-type-form-basic
+
+  "Instrument extend-types over basic primitive types (number, string, ...)"
+
+  [[_ & js*-list] ctx]
+  (let [inst-sets-forms (mapv (fn [[_ _ _ _ x :as js*-form]]
                                (let [fn-form? (and (seq? x) (= 'fn* (first x)))]
                                  (if fn-form?
                                    (let [[_ js-form fn-name type-str f-form] js*-form]
@@ -502,7 +515,11 @@
         inst-code `(do ~@inst-sets-forms)]
     inst-code))
 
-(defn- instrument-cljs-extend-type-form-types [[_ & set!-list] ctx]
+(defn- instrument-cljs-extend-type-form-types
+
+  "Instrument extend-types over user defined types (types defined with deftype, defrecord, etc)"
+
+  [[_ & set!-list] ctx]
 
   (let [inst-sets-forms (map (fn [[_ _ x :as set!-form]]
 
@@ -526,15 +543,20 @@
     inst-code))
 
 (defn- instrument-cljs-extend-protocol-form [[_ & extend-type-forms] ctx]
-  (let [inst-extend-type-forms (map
+  (let [inst-extend-type-forms (mapv
                                 (fn [ex-type-form]
-                                  (let [instrument-cljs-extend-type-form (cond
-                                                                           (inst-utils/cljs-extend-type-form-basic? ex-type-form ctx)
-                                                                           instrument-cljs-extend-type-form-basic
+                                  (let [[instrument-cljs-extend-type-form ctx']
+                                        (cond
+                                          (inst-utils/cljs-extend-type-form-basic? ex-type-form ctx)
+                                          [instrument-cljs-extend-type-form-basic (assoc ctx :extending-basic-type? true)]
 
-                                                                           (inst-utils/cljs-extend-type-form-types? ex-type-form ctx)
-                                                                           instrument-cljs-extend-type-form-types)]
-                                    (instrument-cljs-extend-type-form ex-type-form ctx)))
+                                          (inst-utils/cljs-extend-type-form-types? ex-type-form ctx)
+                                          [instrument-cljs-extend-type-form-types (assoc ctx :extending-basic-type? false)])]
+
+                                    ;; extend-protocol just expand to (do (extend-type ...) (extend-type ...) ...)
+                                    ;; In ClojureScript extend-type macroexpand to two different things depending
+                                    ;; if the type in question is a primitive (string, number, ...) or a defined one (with defrecord, etc)
+                                    (instrument-cljs-extend-type-form ex-type-form ctx')))
                                     extend-type-forms)]
     `(do ~@inst-extend-type-forms)))
 
@@ -756,7 +778,8 @@
         [macroexpand-1-fn expand-symbol] (case compiler
                                            :cljs (let [cljs-macroexpand-1 (requiring-resolve 'cljs.analyzer/macroexpand-1)
                                                        cljs-resolve (requiring-resolve 'cljs.analyzer.api/resolve)]
-                                                   [(partial cljs-macroexpand-1 env)
+                                                   [(fn [form]
+                                                      (cljs-macroexpand-1 env form))
                                                     (fn [symb]
                                                       (or (:name (cljs-resolve env symb))
                                                           symb))])
@@ -789,7 +812,6 @@
   "Recursively instrument a form for tracing."
 
   [{:keys [env] :as config} form]
-
   (let [form-ns (or (:ns config) (str (ns-name *ns*)))
         {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form env)
         tagged-form (utils/tag-form-recursively form ::coor)
@@ -800,7 +822,8 @@
     ;; Printing on the *err* stream is important since
     ;; printing on standard output messes  with clojurescript macroexpansion
     #_(let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (clojure.pprint/pprint x)))]
-      (pprint-on-err "Expanmded form : " expanded-form)
+      (pprint-on-err "Input form : " form)
+      (pprint-on-err "Expanded form : " expanded-form)
       (pprint-on-err "Instrumented form : " inst-code))
 
     inst-code))

@@ -59,11 +59,15 @@
 
   "Predicate to check if a `form` is interesting to instrument."
 
-  [form _]
+  [form {:keys [compiler]}]
 
   (and (seq? form)
        (when (symbol? (first form))
-         (not (#{"ns" "comment" "defprotocol"} (-> form first name))))))
+         (and (not (#{"ns" "comment" "defprotocol"} (-> form first name)))
+              (not (and (= compiler :cljs)
+                        ;; TODO: fix me, currently we can't compile the macroexpanded version of defrecord throu the shadow repl
+                        ;; because of Wrong number of args (4) passed to hansel.instrument.tester/ARecord
+                        (= "defrecord" (-> form first name))))))))
 
 (defn eval-form-error-data [_ ex]
   (let [e-msg (.getMessage ex)]
@@ -102,10 +106,13 @@
            {:inst-form form :init-forms []}
 
            (try
-
              (binding [*ns* (find-ns ns-symb)]
-               (inst-forms/instrument (assoc config :ns (str ns-symb))
-                                      form))
+               #_:clj-kondo/ignore
+               (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb]
+                                   (inst-forms/instrument (-> config
+                                                              (assoc :ns (str ns-symb))
+                                                              (assoc-in [:env :ns :name] ns-symb))
+                                                          form)))
              (catch Exception e
                (.printStackTrace e)
                (throw (ex-info "Error instrumenting form" {:type :unknown-error

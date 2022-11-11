@@ -69,14 +69,14 @@
     (Thread/sleep 500))
 
   ;; setup the ClojureScript side first
-  (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester])" {:ns 'cljs.user})
-  (shadow/cljs-eval :node-repl "(def traces-count (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester] :reload-all)" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(def traces-cnt1 (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
 
-  (shadow/cljs-eval :node-repl "(defn count-form-init [_] (swap! traces-count update :trace-form-init inc))" {:ns 'cljs.user})
-  (shadow/cljs-eval :node-repl "(defn count-fn-call [_] (swap! traces-count update :trace-fn-call inc))" {:ns 'cljs.user})
-  (shadow/cljs-eval :node-repl "(defn count-fn-return [{:keys [return] :as data}] (swap! traces-count update :trace-fn-return inc) return)" {:ns 'cljs.user})
-  (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-count update :trace-expr-exec inc) result)" {:ns 'cljs.user})
-  (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-count update :trace-bind inc))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-form-init [_] (swap! traces-cnt1 update :trace-form-init inc))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-fn-call [_] (swap! traces-cnt1 update :trace-fn-call inc))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-fn-return [{:keys [return] :as data}] (swap! traces-cnt1 update :trace-fn-return inc) return)" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt1 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt1 update :trace-bind inc))" {:ns 'cljs.user})
 
   (hansel/instrument-var-shadow-cljs
    'hansel.instrument.tester/factorial
@@ -86,8 +86,7 @@
      :trace-expr-exec cljs.user/count-expr-exec
      :trace-bind cljs.user/count-bind
      :uninstrument? false
-     :build-id :node-repl
-     :excluding-fns #{clojure.set/intersection}})
+     :build-id :node-repl})
 
   (testing "ClojureScript var instrumentation/uninstrumentation"
 
@@ -103,11 +102,16 @@
             :trace-fn-call 6
             :trace-fn-return 6
             :trace-form-init 1}
-           (some-> (shadow/cljs-eval :node-repl "@traces-count" {:ns 'cljs.user})
+           (some-> (shadow/cljs-eval :node-repl "@traces-cnt1" {:ns 'cljs.user})
                    :results
                    first
                    read-string))
         "Traces count should be correct")
+
+    (hansel/instrument-var-shadow-cljs
+     'hansel.instrument.tester/factorial
+     '{ :uninstrument? true
+       :build-id :node-repl})
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
 
@@ -190,43 +194,47 @@
     (Thread/sleep 500))
 
     ;; setup the ClojureScript side first
-    (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester])" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester] :reload-all)" {:ns 'cljs.user})
 
-    (shadow/cljs-eval :node-repl "(def traces-count (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(def traces-cnt2 (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
 
-    (shadow/cljs-eval :node-repl "(defn count-form-init [_] (swap! traces-count update :trace-form-init inc))" {:ns 'cljs.user})
-    (shadow/cljs-eval :node-repl "(defn count-fn-call [_] (swap! traces-count update :trace-fn-call inc))" {:ns 'cljs.user})
-    (shadow/cljs-eval :node-repl "(defn count-fn-return [{:keys [return] :as data}] (swap! traces-count update :trace-fn-return inc) return)" {:ns 'cljs.user})
-    (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-count update :trace-expr-exec inc) result)" {:ns 'cljs.user})
-    (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-count update :trace-bind inc))" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(defn count-form-init [_] (swap! traces-cnt2 update :trace-form-init inc))" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(defn count-fn-call [_] (swap! traces-cnt2 update :trace-fn-call inc))" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(defn count-fn-return [{:keys [return] :as data}] (swap! traces-cnt2 update :trace-fn-return inc) return)" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt2 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt2 update :trace-bind inc))" {:ns 'cljs.user})
 
     (hansel/instrument-namespaces-shadow-cljs
-     #{"clojure.set"}
+     #{"hansel.instrument.tester"}
      '{:trace-form-init cljs.user/count-form-init
        :trace-fn-call cljs.user/count-fn-call
        :trace-fn-return cljs.user/count-fn-return
        :trace-expr-exec cljs.user/count-expr-exec
        :trace-bind cljs.user/count-bind
        :uninstrument? false
-       :build-id :node-repl
-       :excluding-fns #{clojure.set/intersection}})
+       :build-id :node-repl})
 
-    (is (= 6112
+    (is (= 1066
            (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
                    :results
                    first
                    read-string))
         "Instrumented function should return the same as the original one")
 
-    (is (= {:trace-bind 336
-            :trace-expr-exec 648
-            :trace-fn-call 120
-            :trace-fn-return 120
-            :trace-form-init 13}
-           (some-> (shadow/cljs-eval :node-repl "@traces-count" {:ns 'cljs.user})
+    (is (= {:trace-bind 28
+            :trace-expr-exec 89
+            :trace-fn-call 16
+            :trace-fn-return 16
+            :trace-form-init 8}
+           (some-> (shadow/cljs-eval :node-repl "@traces-cnt2" {:ns 'cljs.user})
                    :results
                    first
                    read-string))
         "Traces count should be correct")
+
+    (hansel/instrument-namespaces-shadow-cljs
+     #{"hansel.instrument.tester"}
+     '{:uninstrument? true
+       :build-id :node-repl})
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))

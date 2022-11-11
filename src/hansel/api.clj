@@ -2,6 +2,7 @@
   (:require [hansel.instrument.forms :as inst-forms]
             [hansel.instrument.namespaces :as inst-ns]
             [hansel.instrument.utils :as inst-utils]
+            [hansel.utils :as utils]
             [hansel.instrument.runtime :as rt]
             [clojure.repl :as clj.repl]))
 
@@ -45,10 +46,17 @@
 (defn instrument-var-shadow-cljs [var-symb {:keys [build-id] :as config}]
   (let [ns-symb (symbol (namespace var-symb))
         form (some->> (inst-utils/source-fn-cljs var-symb build-id)
-                      (read-string {:read-cond :allow}))]
+                      (read-string {:read-cond :allow}))
+        compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
+        cenv (compiler-env build-id)
+        aenv (empty-env)]
     (if form
-
-      (inst-ns/re-eval-form ns-symb form (merge shadow-cljs-namespaces-config config))
+      #_:clj-kondo/ignore
+      (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
+                          (inst-ns/re-eval-form ns-symb form (merge shadow-cljs-namespaces-config
+                                                                    config
+                                                                    {:env aenv})))
 
       (println (format "Couldn't find source for %s" var-symb)))))
 
@@ -59,11 +67,17 @@
                                                   {:prefixes? true}
                                                   clj-namespaces-config)))
 
-(defn instrument-namespaces-shadow-cljs [ns-prefixes config]
-  (inst-ns/instrument-files-for-namespaces ns-prefixes
-                                           (merge config
-                                                  {:prefixes? true}
-                                                  shadow-cljs-namespaces-config)))
+(defn instrument-namespaces-shadow-cljs [ns-prefixes {:keys [build-id] :as config}]
+  (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
+        cenv (compiler-env build-id)
+        aenv (empty-env)]
+    (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
+                        (inst-ns/instrument-files-for-namespaces ns-prefixes
+                                                                 (merge config
+                                                                        {:prefixes? true
+                                                                         :env aenv}
+                                                                        shadow-cljs-namespaces-config)))))
 
 (defmacro with-ctx [ctx & body]
   `(binding [rt/*runtime-ctx* ~ctx]
