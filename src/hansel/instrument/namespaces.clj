@@ -1,10 +1,25 @@
 (ns hansel.instrument.namespaces
   (:require [hansel.instrument.forms :as inst-forms]
+            [hansel.instrument.utils :as inst-utils]
             [hansel.utils :as utils]
             [clojure.string :as str]
             [clojure.tools.namespace.parse :as tools-ns-parse]
             [clojure.tools.namespace.file :as tools-ns-file]
             [clojure.tools.namespace.dependency :as tools-ns-deps]))
+
+(def clj-namespaces-config
+  {:get-all-ns-fn inst-utils/get-all-ns-fn-clj
+   :eval-in-ns-fn inst-utils/eval-in-ns-fn-clj
+   :file-forms-fn inst-utils/file-forms-fn-clj
+   :files-for-ns-fn inst-utils/files-for-ns-fn-clj
+   :compiler :clj})
+
+(def shadow-cljs-namespaces-config
+  {:get-all-ns-fn inst-utils/get-all-ns-fn-cljs
+   :eval-in-ns-fn inst-utils/eval-in-ns-fn-cljs
+   :file-forms-fn inst-utils/file-forms-fn-cljs
+   :files-for-ns-fn inst-utils/files-for-ns-fn-cljs
+   :compiler :cljs})
 
 (def flow-storm-ns-tag "FLOWNS")
 
@@ -78,12 +93,12 @@
       {:type :known-error
        :msg "We can't yet instrument using recur inside fn* (without loop*)"}
 
-      (and (.getCause ex) (str/includes? (.getMessage (.getCause ex)) "Must assign primitive to primitive mutable"))
+      (and (.getCause ex) (.getMessage (.getCause ex)) (str/includes? (.getMessage (.getCause ex)) "Must assign primitive to primitive mutable"))
       {:type :known-error
        :msg "Instrumenting (set! x ...) inside a deftype* being x a mutable primitive type confuses the compiler"
        :retry-disabling #{:trace-expr-exec}}
 
-      (and (.getCause ex) (str/includes? (.getMessage (.getCause ex)) "Method code too large!"))
+      (and (.getCause ex) (.getMessage (.getCause ex)) (str/includes? (.getMessage (.getCause ex)) "Method code too large!"))
       {:type :known-error
        :msg "Instrumented expression is too large for the clojure compiler"
        :retry-disabling #{:trace-expr-exec}}

@@ -41,7 +41,8 @@
         (is (= 15 @trace-count) "Instrumented var should generate traces")
 
         ;; UNinstrument
-        (hansel/instrument-var-clj 'clojure.set/difference {:uninstrument? true})
+        (hansel/uninstrument-var-clj 'clojure.set/difference)
+
         ;; call the UNinstrumented function
         (set/difference #{1 2 3} #{2})
 
@@ -55,7 +56,7 @@
         (is (= 30 @trace-count) "Re instrumented var should generate traces")
 
         ;; finally leave the fn uninstrumented
-        (hansel/instrument-var-clj 'clojure.set/difference {:uninstrument? true})))))
+        (hansel/uninstrument-var-clj 'clojure.set/difference)))))
 
 (deftest instrument-var-shadow-cljs
 
@@ -85,7 +86,6 @@
      :trace-fn-return cljs.user/count-fn-return
      :trace-expr-exec cljs.user/count-expr-exec
      :trace-bind cljs.user/count-bind
-     :uninstrument? false
      :build-id :node-repl})
 
   (testing "ClojureScript var instrumentation/uninstrumentation"
@@ -108,10 +108,9 @@
                    read-string))
         "Traces count should be correct")
 
-    (hansel/instrument-var-shadow-cljs
+    (hansel/uninstrument-var-shadow-cljs
      'hansel.instrument.tester/factorial
-     '{ :uninstrument? true
-       :build-id :node-repl})
+     {:build-id :node-repl})
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
 
@@ -133,9 +132,7 @@
                                             :trace-fn-call trace-fn-call
                                             :trace-fn-return trace-fn-return
                                             :trace-expr-exec trace-expr-exec
-                                            :trace-bind trace-bind
-                                            :verbose? true
-                                            :uninstrument? false})
+                                            :trace-bind trace-bind})
 
         (is (= 6208 (tester/boo [1 "hello" 5]))
             "Instrumented code should return the same as the original code")
@@ -163,8 +160,7 @@
                                           `{:trace-form-init trace-form-init
                                             :trace-fn-call trace-fn-call
                                             :trace-fn-return trace-fn-return
-                                            :excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}
-                                            :uninstrument? false})
+                                            :excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}})
 
         (is (= "Factorial of 5 is : 120\n"
                (with-out-str (cljs-main "-t" "nodejs" (.toString (io/file (io/resource "org/foo/myscript.cljs"))))))
@@ -176,9 +172,8 @@
             "It should trace")
 
         ;; uninstrument everything
-        (hansel/instrument-namespaces-clj #{"cljs."}
-                                          `{ :excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}
-                                            :uninstrument? true})))))
+        (hansel/uninstrument-namespaces-clj #{"cljs."}
+                                            {:excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}})))))
 
 ;; This test works but sometimes it dead locks
 (deftest shadow-cljs-full-tester-instrumentation
@@ -211,7 +206,6 @@
        :trace-fn-return cljs.user/count-fn-return
        :trace-expr-exec cljs.user/count-expr-exec
        :trace-bind cljs.user/count-bind
-       :uninstrument? false
        :build-id :node-repl})
 
     (is (= 1066
@@ -232,9 +226,8 @@
                    read-string))
         "Traces count should be correct")
 
-    (hansel/instrument-namespaces-shadow-cljs
+    (hansel/uninstrument-namespaces-shadow-cljs
      #{"hansel.instrument.tester"}
-     '{:uninstrument? true
-       :build-id :node-repl})
+     {:build-id :node-repl})
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
