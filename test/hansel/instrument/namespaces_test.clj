@@ -5,8 +5,8 @@
             [hansel.instrument.tester :as tester]
             [clojure.test :refer [deftest is testing] :as t]
             [clojure.set :as set]
-            #_[shadow.cljs.devtools.api :as shadow]
-            #_[shadow.cljs.devtools.server :as shadow-server]))
+            [shadow.cljs.devtools.api :as shadow]
+            [shadow.cljs.devtools.server :as shadow-server]))
 
 
 (declare trace-form-init)
@@ -57,6 +57,60 @@
         ;; finally leave the fn uninstrumented
         (hansel/instrument-var-clj 'clojure.set/difference {:uninstrument? true})))))
 
+(deftest instrument-var-shadow-cljs
+
+  (shadow-server/start!)
+  (.start (Thread. (fn [] (shadow/node-repl))))
+
+  ;; wait for the repl
+  (while (not= "42"
+               (let [{:keys [results]} (shadow/cljs-eval :node-repl "42" {:ns 'cljs.user})]
+                 (first results)))
+    (Thread/sleep 500))
+
+  ;; setup the ClojureScript side first
+  (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester])" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(def traces-count (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
+
+  (shadow/cljs-eval :node-repl "(defn count-form-init [_] (swap! traces-count update :trace-form-init inc))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-fn-call [_] (swap! traces-count update :trace-fn-call inc))" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-fn-return [{:keys [return] :as data}] (swap! traces-count update :trace-fn-return inc) return)" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-count update :trace-expr-exec inc) result)" {:ns 'cljs.user})
+  (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-count update :trace-bind inc))" {:ns 'cljs.user})
+
+  (hansel/instrument-var-shadow-cljs
+   'hansel.instrument.tester/factorial
+   '{:trace-form-init cljs.user/count-form-init
+     :trace-fn-call cljs.user/count-fn-call
+     :trace-fn-return cljs.user/count-fn-return
+     :trace-expr-exec cljs.user/count-expr-exec
+     :trace-bind cljs.user/count-bind
+     :uninstrument? false
+     :build-id :node-repl
+     :excluding-fns #{clojure.set/intersection}})
+
+  (testing "ClojureScript var instrumentation/uninstrumentation"
+
+    (is (= 120
+           (some-> (shadow/cljs-eval :node-repl "(tester/factorial 5)" {:ns 'cljs.user})
+                   :results
+                   first
+                   read-string))
+        "Instrumented function should return the same as the original one")
+
+    (is (= {:trace-bind 6
+            :trace-expr-exec 43
+            :trace-fn-call 6
+            :trace-fn-return 6
+            :trace-form-init 1}
+           (some-> (shadow/cljs-eval :node-repl "@traces-count" {:ns 'cljs.user})
+                   :results
+                   first
+                   read-string))
+        "Traces count should be correct")
+
+    (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
+
 (deftest clojure-full-tester-namespace-instrumentation
   (testing "Full tester namespaces instrumentation"
     (let [traces-counts (atom {:trace-form-init 0
@@ -105,7 +159,7 @@
                                           `{:trace-form-init trace-form-init
                                             :trace-fn-call trace-fn-call
                                             :trace-fn-return trace-fn-return
-                                            :excluding-ns #{"cljs.core"}
+                                            :excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}
                                             :uninstrument? false})
 
         (is (= "Factorial of 5 is : 120\n"
@@ -115,21 +169,28 @@
         (is (->> @traces-counts
                  vals
                  (every? pos?))
-            "It should trace")))))
+            "It should trace")
+
+        ;; uninstrument everything
+        (hansel/instrument-namespaces-clj #{"cljs."}
+                                          `{ :excluding-ns #{"cljs.core" "cljs.vendor.clojure.tools.reader.default-data-readers"}
+                                            :uninstrument? true})))))
 
 ;; This test works but sometimes it dead locks
-#_(deftest shadow-cljs-full-cljs-set-instrumentation
-  (testing "Full ClojureScript cljs.set instrumentation via shadow-cljs"
+(deftest shadow-cljs-full-tester-instrumentation
+  (testing "Full ClojureScript hansel.instrument.tester instrumentation via shadow-cljs"
 
     (shadow-server/start!)
     (.start (Thread. (fn [] (shadow/node-repl))))
 
     ;; wait for the repl
-    (while (not= "42" (first (:results (shadow/cljs-eval :node-repl "42" {:ns 'cljs.user}))))
-      (Thread/sleep 500))
+    (while (not= "42"
+               (let [{:keys [results]} (shadow/cljs-eval :node-repl "42" {:ns 'cljs.user})]
+                 (first results)))
+    (Thread/sleep 500))
 
     ;; setup the ClojureScript side first
-    (shadow/cljs-eval :node-repl "(require '[clojure.set :as set])" {:ns 'cljs.user})
+    (shadow/cljs-eval :node-repl "(require '[hansel.instrument.tester :as tester])" {:ns 'cljs.user})
 
     (shadow/cljs-eval :node-repl "(def traces-count (atom {:trace-form-init 0, :trace-fn-call 0, :trace-fn-return 0, :trace-expr-exec 0, :trace-bind 0}))" {:ns 'cljs.user})
 
@@ -150,20 +211,22 @@
        :build-id :node-repl
        :excluding-fns #{clojure.set/intersection}})
 
-    (is (= #{1 3}
-           (-> (shadow/cljs-eval :node-repl "(set/difference #{1 2 3} #{2})" {:ns 'cljs.user})
-               :results
-               first
-               read-string))
+    (is (= 6112
+           (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
+                   :results
+                   first
+                   read-string))
         "Instrumented function should return the same as the original one")
 
-    (is (= {:trace-bind 338
-            :trace-expr-exec 658
-            :trace-fn-call 121
-            :trace-fn-return 121
+    (is (= {:trace-bind 336
+            :trace-expr-exec 648
+            :trace-fn-call 120
+            :trace-fn-return 120
             :trace-form-init 13}
-           (-> (shadow/cljs-eval :node-repl "@traces-count" {:ns 'cljs.user})
-               :results
-               first
-               read-string))
-        "Traces count should be correct")))
+           (some-> (shadow/cljs-eval :node-repl "@traces-count" {:ns 'cljs.user})
+                   :results
+                   first
+                   read-string))
+        "Traces count should be correct")
+
+    (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))

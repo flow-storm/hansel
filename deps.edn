@@ -6,7 +6,7 @@
            :test {:extra-paths ["test"]
                   :extra-deps {org.clojure/core.match    {:mvn/version "1.0.0"}
                                thheller/shadow-cljs      {:mvn/version "2.20.7"}}}
-           :test-clj {:extra-deps {lambdaisland/kaocha {:mvn/version "1.70.1086"}}
+           :test-clj {:extra-deps {lambdaisland/kaocha {:mvn/version "1.71.1119"}}
                       :main-opts ["-m" "kaocha.runner"]}
            :test-cljs {:extra-deps {com.lambdaisland/kaocha-cljs {:mvn/version "1.4.130"}}
                        :main-opts ["-m" "kaocha.runner"]}

@@ -6,4 +6,6 @@
           :cljs/repl-env cljs.repl.node/repl-env}
          {:id :unit-clj
           :source-paths ["src"]
-          :test-paths ["test"]}]}
+          :test-paths ["test"]}]
+ :kaocha/fail-fast? true
+ :plugins [:kaocha.plugin/profiling]}

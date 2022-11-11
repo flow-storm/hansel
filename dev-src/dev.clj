@@ -66,12 +66,13 @@
   (require '[hansel.api :as hansel])
   (hansel/instrument-namespaces-shadow-cljs
    #{"clojure.set"}
-   '{:trace-form-init cljs.user/print-form-init
-     :trace-fn-call cljs.user/print-fn-call
-     :trace-fn-return cljs.user/print-fn-return
-     :trace-expr-exec cljs.user/print-expr-exec
-     :trace-bind cljs.user/print-bind
+   '{:trace-form-init dev/print-form-init
+     :trace-fn-call dev/print-fn-call
+     :trace-fn-return dev/print-fn-return
+     :trace-expr-exec dev/print-expr-exec
+     :trace-bind dev/print-bind
      :uninstrument? false
+     :verbose? true
      :build-id :browser-repl})
 
   (require '[clojure.set :as s])

@@ -67,6 +67,17 @@
     (when file
       [file])))
 
+(defn source-fn-cljs [var-symb build-id]
+  (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
+        source-fn (requiring-resolve 'cljs.repl/source-fn)
+        cenv (compiler-env build-id)
+        aenv (assoc-in (empty-env) [:ns :name] 'cljs.user)]
+
+    (utils/lazy-binding [cljs.analyzer/*cljs-ns* 'cljs.user
+                         cljs.env/*compiler* (atom cenv)]
+                        (source-fn aenv var-symb))))
+
 (defn compiler-from-env [env]
   (if (contains? env :js-globals)
     :cljs
