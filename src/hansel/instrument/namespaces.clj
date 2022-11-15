@@ -161,7 +161,7 @@
           (catch clojure.lang.ExceptionInfo ei
             (let [e-data (ex-data ei)
                   ex-type (:type e-data)
-                  ex-type-color (if (:known-error ex-type)
+                  ex-type-color (if (= :known-error ex-type)
                                   :yellow
                                   :red)]
               (if verbose?

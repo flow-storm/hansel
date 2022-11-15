@@ -11,7 +11,7 @@
 (defn jar [_]
   (clean nil)
   (let [lib 'com.github.jpmonettas/hansel
-        version (format "0.1-alpha-%s" (b/git-count-revs nil))
+        version (format "0.1.%s" (b/git-count-revs nil))
         basis (b/create-basis {:project "deps.edn"
                                :aliases []})
         jar-file (format "target/%s.jar" (name lib))
