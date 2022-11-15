@@ -206,7 +206,8 @@
        :trace-fn-return cljs.user/count-fn-return
        :trace-expr-exec cljs.user/count-expr-exec
        :trace-bind cljs.user/count-bind
-       :build-id :node-repl})
+       :build-id :node-repl
+       :verbose? true})
 
     (is (= 1066
            (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
@@ -215,11 +216,11 @@
                    read-string))
         "Instrumented function should return the same as the original one")
 
-    (is (= {:trace-bind 28
-            :trace-expr-exec 89
-            :trace-fn-call 16
-            :trace-fn-return 16
-            :trace-form-init 8}
+    (is (= {:trace-bind 32
+            :trace-expr-exec 98
+            :trace-fn-call 19
+            :trace-fn-return 19
+            :trace-form-init 10}
            (some-> (shadow/cljs-eval :node-repl "@traces-cnt2" {:ns 'cljs.user})
                    :results
                    first

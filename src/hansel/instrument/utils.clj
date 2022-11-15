@@ -23,7 +23,10 @@
         {:keys [results err]} (cljs-eval build-id (pr-str form) {:ns ns-symb})]
     (if-not (str/blank? err)
       (throw (Exception. err))
-      (first results))))
+      (try
+        (read-string (first results))
+        ;; HACKY: if we can't read the results, just return it as a string
+        (catch Exception _ (first results))))))
 
 (defn file-forms-fn-clj [ns-symb file-url _]
   (binding [*ns* (find-ns ns-symb)]
@@ -60,7 +63,10 @@
 (defn files-for-ns-fn-cljs  [ns-symb {:keys [build-id]}]
   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
         ns (-> (compiler-env build-id) :cljs.analyzer/namespaces ns-symb)
-        file-name (-> ns :meta :file)
+        file-name (or (-> ns :meta :file)
+                      ;; this is to cover for a weird intermitent case
+                      ;; where ns :meta :file is nil
+                      (some-> ns :defs vals first :meta :file))
         file (when file-name
                (or (io/resource file-name)
                    (.toURL (io/file file-name))))]
@@ -77,6 +83,25 @@
     (utils/lazy-binding [cljs.analyzer/*cljs-ns* 'cljs.user
                          cljs.env/*compiler* (atom cenv)]
                         (source-fn aenv var-symb))))
+
+;; TODO: write a macro that expand to all this compiler and analysis env wrap setup
+(defn cljs-get-all-ns [build-id]
+  (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+        all-ns (requiring-resolve 'cljs.analyzer.api/all-ns)
+        cenv (compiler-env build-id)]
+    (utils/lazy-binding [cljs.analyzer/*cljs-ns* 'cljs.user
+                         cljs.env/*compiler* (atom cenv)]
+                        (mapv str (all-ns)))))
+
+(defn cljs-get-ns-interns [ns-symb build-id]
+  (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+        ns-interns (requiring-resolve 'cljs.analyzer.api/ns-interns)
+        cenv (compiler-env build-id)]
+    (utils/lazy-binding [cljs.analyzer/*cljs-ns* 'cljs.user
+                         cljs.env/*compiler* (atom cenv)]
+                        (->> (ns-interns ns-symb)
+                             keys
+                             (mapv str)))))
 
 (defn compiler-from-env [env]
   (if (contains? env :js-globals)

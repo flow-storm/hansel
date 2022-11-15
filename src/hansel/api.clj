@@ -56,9 +56,9 @@
 
   "Uninstrument a Clojure `var-symb` instrumented by `hansel.api/instrument-var-clj`"
 
-  [var-symb]
-
-  (instrument-var-clj var-symb {:uninstrument? true}))
+  ([var-symb] (uninstrument-var-clj var-symb {}))
+  ([var-symb config]
+   (instrument-var-clj var-symb (assoc config :uninstrument? true))))
 
 (defn instrument-namespaces-clj
 

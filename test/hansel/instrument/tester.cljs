@@ -5,6 +5,10 @@
     1
     (* n (factorial (dec n)))))
 
+(defn multi-arity
+  ([a] (multi-arity a 10))
+  ([a b] (+ a b)))
+
 (defmulti do-it type)
 
 (defmethod do-it js/Number
@@ -53,5 +57,6 @@
                  (reduce + ))
         after-add (add sum)
         after-sub (sub after-add)
+        w (multi-arity a)
         final (+ c d)]
     final))

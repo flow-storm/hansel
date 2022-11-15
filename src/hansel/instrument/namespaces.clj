@@ -1,6 +1,5 @@
 (ns hansel.instrument.namespaces
-  (:require [hansel.instrument.forms :as inst-forms]
-            [hansel.instrument.utils :as inst-utils]
+  (:require [hansel.instrument.utils :as inst-utils]
             [hansel.utils :as utils]
             [clojure.string :as str]
             [clojure.tools.namespace.parse :as tools-ns-parse]
@@ -74,15 +73,11 @@
 
   "Predicate to check if a `form` is interesting to instrument."
 
-  [form {:keys [compiler]}]
+  [form _]
 
   (and (seq? form)
        (when (symbol? (first form))
-         (and (not (#{"ns" "comment" "defprotocol"} (-> form first name)))
-              (not (and (= compiler :cljs)
-                        ;; TODO: fix me, currently we can't compile the macroexpanded version of defrecord throu the shadow repl
-                        ;; because of Wrong number of args (4) passed to hansel.instrument.tester/ARecord
-                        (= "defrecord" (-> form first name))))))))
+         (not (#{"ns" "comment" "defprotocol"} (-> form first name))))))
 
 (defn eval-form-error-data [_ ex]
   (let [e-msg (.getMessage ex)]
@@ -115,34 +110,18 @@
 
   ([ns-symb form {:keys [uninstrument? eval-in-ns-fn] :as config} retrying?]
 
-   (let [{:keys [init-forms inst-form]}
-         (if uninstrument?
-
-           {:inst-form form :init-forms []}
-
-           (try
-             (binding [*ns* (find-ns ns-symb)]
-               #_:clj-kondo/ignore
-               (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb]
-                                   (inst-forms/instrument (-> config
-                                                              (assoc :ns (str ns-symb))
-                                                              (assoc-in [:env :ns :name] ns-symb))
-                                                          form)))
-             (catch Exception e
-               (.printStackTrace e)
-               (throw (ex-info "Error instrumenting form" {:type :unknown-error
-                                                           :msg (.getMessage e)})))))
-         final-form `(do
-                       ~@init-forms
-                       ~inst-form)]
+   (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fn :verbose?
+                                        :trace-form-init :trace-fn-call :trace-fn-return :trace-expr-exec :trace-bind])
+         to-eval-form `(hansel.api/instrument ~inst-opts ~form)]
 
      (try
-
-       (eval-in-ns-fn ns-symb final-form config)
+       (if uninstrument?
+         (eval-in-ns-fn ns-symb form config)
+         (eval-in-ns-fn ns-symb to-eval-form config))
 
        (catch Exception e
 
-         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data final-form e)]
+         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data to-eval-form e)]
            (if (and (not retrying?) retry-disabling)
              (do
                (when (:verbose? config)
@@ -151,7 +130,7 @@
                (re-eval-form ns-symb form (apply dissoc config retry-disabling) true))
              (throw (ex-info "Error evaluating form" (assoc error-data
                                                             :original-form form
-                                                            :instrumented-form final-form))))))))))
+                                                            :instrumented-form to-eval-form))))))))))
 
 (defn re-eval-file-forms [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
   (let [file-forms (file-forms-fn ns-symb file-url config)]
@@ -182,9 +161,9 @@
           (catch clojure.lang.ExceptionInfo ei
             (let [e-data (ex-data ei)
                   ex-type (:type e-data)
-                  ex-type-color (case ex-type
-                                  :known-error   :yellow
-                                  :unknown-error :red)]
+                  ex-type-color (if (:known-error ex-type)
+                                  :yellow
+                                  :red)]
               (if verbose?
                 (do
                   (println)
