@@ -3,11 +3,15 @@
 
 Hansel leaving a trail o pebbles.
 
-Hansel allows you to instrument Clojure[Script] forms so they leave a trail when they run.
+Hansel allows you to instrument Clojure[Script] forms and entire namespaces, so they leave a trail when they run.
+
+It is ment as a platform to build tooling that depends on code instrumentation, like debuggers.
 
 [![Clojars Project](https://img.shields.io/clojars/v/com.github.jpmonettas/hansel.svg)](https://clojars.org/com.github.jpmonettas/hansel)
 
-Example :
+## Clojure QuickStart
+
+### Basic instrumentation
 
 ```clojure
 (require '[hansel.api :as hansel]) ;; first require hansel api
@@ -66,7 +70,7 @@ Example :
 ;; [fn-return] data: {:return 5, :form-id -1653360108}
 ```
 
-Conditional tracing :
+### Conditional tracing
 
 ```clojure
 (hansel/instrument {:trace-form-init dev/print-form-init
@@ -92,7 +96,7 @@ Conditional tracing :
 
 ```
 
-Full Clojure namespaces instrumentation
+### Namespaces instrumentation
 
 ```clojure
 
@@ -102,24 +106,27 @@ Full Clojure namespaces instrumentation
                                       :trace-fn-return dev/print-fn-return
                                       :trace-expr-exec dev/print-expr-exec
                                       :trace-bind dev/print-bind
-									  :prefixes? false
-                                      :uninstrument? false}) ;; <- you can use the same call with :uninstrument? true to uninstrument all namespaces
+									  :prefixes? false})
 									  
 (clojure.set/difference #{1 2 3} #{2})
 ```
 
-Full ClojureScript namespaces instrumentation (shadow-cljs only)
+## ClojureScript
+
+### ClojureScript namespaces instrumentation (shadow-cljs only)
 
 First start your shadow app :
+
 ```
 rlwrap npx shadow-cljs browser-repl
-````
+```
 
 On the ClojureScript side you need to define your handlers, so lets assume you have defined all your print-fns as before
 inside cljs.user namespace.
 
-On your shadow clj repl (you can connect to it via nRepl or by `npx shadow-cljs clj`) :
+On your shadow clj repl (you can connect to it via nRepl or by `npx shadow-cljs clj :browser-repl`) :
 ```
+
 shadow.user> (require '[hansel.api :as hansel])
 
 ;; instrument your namespaces providing the handlers you defined in the ClojureScript runtime side
@@ -131,7 +138,6 @@ shadow.user> (hansel/instrument-namespaces-shadow-cljs
                   :trace-fn-return cljs.user/print-fn-return
                   :trace-expr-exec cljs.user/print-expr-exec
                   :trace-bind cljs.user/print-bind
-                  :uninstrument? false
                   :build-id :browser-repl}) ;; <- need to provide your shadow app build-id
 ```
 
@@ -140,3 +146,19 @@ Now go back to your ClojureScript repl and run :
 ```
 cljs.user> (clojure.set/difference #{1 2 3} #{2})
 ```
+
+## The coordinate system
+
+All expression and bind traces data will contain a `:coor` field, which specifies the coordinate inside the form with `:form-id` this value refers to.
+
+So the coordinate `[3 2]` in the form :
+
+```clojure
+(defn foo [a b] (+ a b))
+```
+
+refers to the `b` symbol in `(+ a b)` which is under coordinate `[3]`.
+
+## Projects currently using Hansel
+
+- [FlowStorm debugger](https://github.com/jpmonettas/flow-storm-debugger)
