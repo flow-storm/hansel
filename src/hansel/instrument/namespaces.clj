@@ -1,5 +1,6 @@
 (ns hansel.instrument.namespaces
   (:require [hansel.instrument.utils :as inst-utils]
+            [hansel.instrument.forms :as inst-forms]
             [hansel.utils :as utils]
             [clojure.string :as str]
             [clojure.tools.namespace.parse :as tools-ns-parse]
@@ -79,7 +80,7 @@
        (when (symbol? (first form))
          (not (#{"ns" "comment" "defprotocol"} (-> form first name))))))
 
-(defn eval-form-error-data [_ ex]
+(defn eval-form-error-data [ex]
   (let [e-msg (.getMessage ex)]
     (cond
 
@@ -106,22 +107,46 @@
 
 (defn re-eval-form
 
+  "Re evaluate `form` under namespace `ns-symb`, posibliy instrumenting it before when `uninstrument?` is false,
+  in which case it returns the set of instrumented fns."
+
   ([ns-symb form config] (re-eval-form ns-symb form config false))
 
-  ([ns-symb form {:keys [uninstrument? eval-in-ns-fn] :as config} retrying?]
+  ([ns-symb form {:keys [compiler uninstrument? eval-in-ns-fn] :as config} retrying?]
 
    (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fn :verbose?
-                                        :trace-form-init :trace-fn-call :trace-fn-return :trace-expr-exec :trace-bind])
-         to-eval-form `(hansel.api/instrument ~inst-opts ~form)]
+                                        :trace-form-init :trace-fn-call :trace-fn-return :trace-expr-exec :trace-bind])]
 
      (try
        (if uninstrument?
-         (eval-in-ns-fn ns-symb form config)
-         (eval-in-ns-fn ns-symb to-eval-form config))
+
+         (do
+           (eval-in-ns-fn ns-symb form config)
+           #{})
+
+         (let [{:keys [init-forms inst-form instrumented-fns]}
+               #_:clj-kondo/ignore
+               (binding [*ns* (find-ns ns-symb)] ;; bind ns for clojure
+                 (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb] ;; bind ns for clojurescript
+                                     (inst-forms/instrument inst-opts form)))]
+           (case compiler
+
+             ;; for ClojureScript we are instrumenting the form twice,
+             ;; once for getting the `instrumented-fns` and the second because we have
+             ;; to eval (instrument ... form), since we can't eval `inst-form` because
+             ;; (defrecord ...) and multy-arity defn macroexpansions can't be evaluated
+             :cljs (let [to-eval-form `(hansel.api/instrument ~inst-opts ~form)]
+                     (eval-in-ns-fn ns-symb to-eval-form config))
+
+             :clj (let [to-eval-form `(do
+                                        ~@init-forms
+                                        ~inst-form)]
+                    (eval-in-ns-fn ns-symb to-eval-form config)))
+           instrumented-fns))
 
        (catch Exception e
 
-         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data to-eval-form e)]
+         (let [{:keys [msg retry-disabling] :as error-data} (eval-form-error-data e)]
            (if (and (not retrying?) retry-disabling)
              (do
                (when (:verbose? config)
@@ -129,10 +154,17 @@
                                                 :yellow)))
                (re-eval-form ns-symb form (apply dissoc config retry-disabling) true))
              (throw (ex-info "Error evaluating form" (assoc error-data
-                                                            :original-form form
-                                                            :instrumented-form to-eval-form))))))))))
+                                                            :original-form form))))))))))
 
-(defn re-eval-file-forms [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
+(defn re-eval-file-forms
+
+  "Re evaluates all forms inside `file-url` under namespace `ns-symb` possibliy
+  instrumenting them depending on the value of `uninstrument?`.
+
+  Returns a set of instrumented fns."
+
+  [ns-symb file-url {:keys [compiler uninstrument? file-forms-fn verbose?] :as config}]
+
   (let [file-forms (file-forms-fn ns-symb file-url config)]
 
     (println (format "\n%s namespace: %s Forms (%d) (%s)"
@@ -146,44 +178,52 @@
                          (->> (vals (ns-interns (find-ns ns-symb)))
                               (reduce (fn [r v]
                                         (assoc r v (meta v)))
-                                      {})))]
-      (doseq [form file-forms]
-        (try
+                                      {})))
+          re-eval-form-step (fn [inst-fns form]
+                              (try
 
-          (if-not (interesting-form? form config)
+                                (if-not (interesting-form? form config)
 
-            (print ".")
+                                  (do
+                                    (print ".")
+                                    inst-fns)
 
-            (do
-              (re-eval-form ns-symb form config)
-              (print "I")))
+                                  (do
+                                    (print "I")
+                                    (into inst-fns (re-eval-form ns-symb form config))))
 
-          (catch clojure.lang.ExceptionInfo ei
-            (let [e-data (ex-data ei)
-                  ex-type (:type e-data)
-                  ex-type-color (if (= :known-error ex-type)
-                                  :yellow
-                                  :red)]
-              (if verbose?
-                (do
-                  (println)
-                  (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
-                  (println))
+                                (catch clojure.lang.ExceptionInfo ei
+                                  (let [e-data (ex-data ei)
+                                        ex-type (:type e-data)
+                                        ex-type-color (if (= :known-error ex-type)
+                                                        :yellow
+                                                        :red)]
+                                    (if verbose?
+                                      (do
+                                        (println)
+                                        (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
+                                        (println))
 
-                ;; else, quiet mode
-                (print (utils/colored-string "X" ex-type-color)))))))
+                                      ;; else, quiet mode
+                                      (print (utils/colored-string "X" ex-type-color)))
+                                    inst-fns))))
+          instrumented-fns (reduce re-eval-form-step #{} file-forms)]
 
       ;; for Clojure restore all var meta for the ns
       (when (= :clj compiler)
         (doseq [[v vmeta] ns-vars-meta]
-          (alter-meta! v (constantly vmeta)))))
-    (println)))
+          (alter-meta! v (constantly vmeta))))
+
+      (println)
+      instrumented-fns)))
 
 (defn instrument-files-for-namespaces
 
   "Instrument and evaluates all forms of all loaded namespaces matching
   `ns-strs`.
-  If `prefixes?` is true, `ns-strs` will be used as prefixes, else a exact match will be required."
+  If `prefixes?` is true, `ns-strs` will be used as prefixes, else a exact match will be required.
+
+  Returns the set of instrumented fns."
 
   [ns-strs {:keys [prefixes? files-for-ns-fn uninstrument?] :as config}]
 
@@ -253,9 +293,11 @@
 
         files-to-be-instrumented (into topo-sorted-files independent-files)
 
-        affected-namespaces (->> files-to-be-instrumented (map :ns) (into #{}))]
+        affected-namespaces (into #{} (map :ns files-to-be-instrumented))
 
-    (doseq [{:keys [ns file]} files-to-be-instrumented]
-      (re-eval-file-forms ns file config))
-
-    affected-namespaces))
+        inst-fns (reduce (fn [ifns {:keys [ns file]}]
+                           (into ifns (re-eval-file-forms ns file config)))
+                         #{}
+                         files-to-be-instrumented)]
+    {:inst-fns inst-fns
+     :affected-namespaces affected-namespaces}))

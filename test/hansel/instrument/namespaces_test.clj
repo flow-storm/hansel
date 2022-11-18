@@ -167,23 +167,40 @@
                     trace-bind (fn [_] (swap! traces-counts update :trace-bind inc))
                     trace-expr-exec (fn [data] (swap! traces-counts update :trace-expr-exec inc) (:result data))]
 
-        (hansel/instrument-namespaces-clj #{"hansel.instrument.tester"}
-                                          `{:trace-form-init trace-form-init
-                                            :trace-fn-call trace-fn-call
-                                            :trace-fn-return trace-fn-return
-                                            :trace-expr-exec trace-expr-exec
-                                            :trace-bind trace-bind})
+        (let [{:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-clj #{"hansel.instrument.tester"}
+                                                                                       `{:trace-form-init trace-form-init
+                                                                                         :trace-fn-call trace-fn-call
+                                                                                         :trace-fn-return trace-fn-return
+                                                                                         :trace-expr-exec trace-expr-exec
+                                                                                         :trace-bind trace-bind
+                                                                                         :verbose? true})]
 
-        (is (= 6208 (tester/boo [1 "hello" 5]))
-            "Instrumented code should return the same as the original code")
+          (is (= '#{[hansel.instrument.tester/->ARecord 1]
+                    [hansel.instrument.tester/add 1]
+                    [hansel.instrument.tester/boo 1]
+                    [hansel.instrument.tester/do-it 1]
+                    [hansel.instrument.tester/dummy-sum-macro 4]
+                    [hansel.instrument.tester/factorial 1]
+                    [hansel.instrument.tester/map->ARecord 1]
+                    [hansel.instrument.tester/other-function 2]
+                    [hansel.instrument.tester/sub 1]}
+                 inst-fns)
+              "Namespace instrumentation should collect instrumented fns")
 
-        (is (= @traces-counts
-               {:trace-form-init 10,
-                :trace-fn-call 20,
-                :trace-fn-return 20,
-                :trace-expr-exec 817,
-                :trace-bind 236})
-            "Traces count differ")))))
+          (is (= '#{hansel.instrument.tester}
+                 affected-namespaces)
+              "Namespace instrumentation should collect affected-namespaces")
+
+          (is (= 6208 (tester/boo [1 "hello" 5]))
+              "Instrumented code should return the same as the original code")
+
+          (is (= @traces-counts
+                 {:trace-form-init 10,
+                  :trace-fn-call 20,
+                  :trace-fn-return 20,
+                  :trace-expr-exec 817,
+                  :trace-bind 236})
+              "Traces count differ"))))))
 
 (deftest clojure-light-clojurescript-namespaces-instrumentation
   (testing "Light ClojureScript namespaces instrumentation"
@@ -239,15 +256,32 @@
     (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt2 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
     (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt2 update :trace-bind inc))" {:ns 'cljs.user})
 
-    (hansel/instrument-namespaces-shadow-cljs
-     #{"hansel.instrument.tester"}
-     '{:trace-form-init cljs.user/count-form-init
-       :trace-fn-call cljs.user/count-fn-call
-       :trace-fn-return cljs.user/count-fn-return
-       :trace-expr-exec cljs.user/count-expr-exec
-       :trace-bind cljs.user/count-bind
-       :build-id :node-repl
-       :verbose? true})
+    (let [{:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-shadow-cljs
+                                                  #{"hansel.instrument.tester"}
+                                                  '{:trace-form-init cljs.user/count-form-init
+                                                    :trace-fn-call cljs.user/count-fn-call
+                                                    :trace-fn-return cljs.user/count-fn-return
+                                                    :trace-expr-exec cljs.user/count-expr-exec
+                                                    :trace-bind cljs.user/count-bind
+                                                    :build-id :node-repl
+                                                    :verbose? true})]
+
+      (is (= '#{[hansel.instrument.tester/->ARecord 1]
+                [hansel.instrument.tester/add 1]
+                [hansel.instrument.tester/boo 1]
+                [hansel.instrument.tester/do-it 1]
+                [hansel.instrument.tester/factorial 1]
+                [hansel.instrument.tester/map->ARecord 1]
+                [hansel.instrument.tester/other-function 2]
+                [hansel.instrument.tester/sub 1]
+                [hansel.instrument.tester/multi-arity 1]
+                [hansel.instrument.tester/multi-arity 2]}
+             inst-fns)
+          "Namespace instrumentation should collect instrumented fns")
+
+      (is (= '#{hansel.instrument.tester}
+             affected-namespaces)
+          "Namespace instrumentation should collect affected-namespaces"))
 
     (is (= 1066
            (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})

@@ -101,7 +101,12 @@
   plus :
   - :verbose? true or false to indicate verbose logging
   - :excluding-ns a set of namepsaces names as string to be excluded from instrumentation
-  - :excluding-fns a set of fully cualified fn symbols to be excluded from instrumentation"
+  - :excluding-fns a set of fully cualified fn symbols to be excluded from instrumentation
+
+  Returns a map with :
+  - :inst-fns the set of instrumented fns
+  - :affected-namespaces the set of affected namespaces
+  "
 
   [ns-prefixes config]
 
@@ -197,7 +202,9 @@
   the config should also contain a :build-id
   Meant to be used from shadow-cljs clojure repl (not the ClojureScript one)
 
-  The :trace-* handlers should be fully qualified symbols of functions in the ClojureScript runtime."
+  The :trace-* handlers should be fully qualified symbols of functions in the ClojureScript runtime.
+
+  Returns the set of instrumented fns."
 
   [ns-prefixes {:keys [build-id] :as config}]
 

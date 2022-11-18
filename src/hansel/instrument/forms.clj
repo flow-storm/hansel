@@ -28,6 +28,13 @@
 ;; Instrumentation ;;
 ;;;;;;;;;;;;;;;;;;;;;
 
+(defn make-instrumented-fn-tracker []
+  (atom #{}))
+
+(defn track-fn! [{:keys [instrumented-fns]} fn-ns fn-name arity]
+  (let [fn-fq-symb (symbol fn-ns fn-name)]
+    (swap! instrumented-fns conj [fn-fq-symb arity])))
+
 (def skip-instrument-forms
   "Set of special-forms that we don't want to wrap with instrumentation.
   These are either forms that don't do anything interesting (like
@@ -226,22 +233,30 @@
   "Instrument a (fn* ([] )) arity body. The core of functions body instrumentation."
 
   [[arity-args-vec & arity-body-forms :as arity] {:keys [compiler fn-ctx outer-form-kind form-id form-ns disable excluding-fns trace-fn-call] :as ctx}]
-  (let [fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
+  (let [unnamed-fn? (nil? (:trace-name fn-ctx))
+        inner-fn? (= :anonymous (:kind fn-ctx))
+        fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
+        fn-args (expanded-fn-args-vec-symbols arity-args-vec)
         outer-preamble (if trace-fn-call
                          (-> []
-                             (into [`(~trace-fn-call {:form-id ~form-id
-                                                      :ns ~form-ns
-                                                      :fn-name ~fn-trace-name
-                                                      :fn-args ~(expanded-fn-args-vec-symbols arity-args-vec)})])
+                             (into [`(~trace-fn-call ~{:form-id form-id
+                                                       :ns form-ns
+                                                       :fn-name fn-trace-name
+                                                       :unnamed-fn? unnamed-fn?
+                                                       :inner-fn? inner-fn?
+                                                       :fn-args fn-args})])
                              (into (args-bind-tracers arity-args-vec ctx)))
                          [])
+
+        _ (when-not unnamed-fn?
+            (track-fn! ctx form-ns fn-trace-name (count fn-args)))
 
         ctx' (-> ctx
                  (dissoc :fn-ctx)) ;; remove :fn-ctx so fn* down the road instrument as anonymous fns
 
         lazy-seq-fn? (inst-utils/expanded-lazy-seq-form? (first arity-body-forms))
 
-        inst-arity-body-form (cond (or (and (disable :anonymous-fn) (= :anonymous (:kind fn-ctx))) ;; don't instrument anonymous-fn if they are disabled
+        inst-arity-body-form (cond (or (and (disable :anonymous-fn) inner-fn?) ;; don't instrument anonymous-fn if they are disabled
                                        (and (#{:deftype :defrecord} outer-form-kind)
                                             (or (str/starts-with? fn-trace-name "->")
                                                 (str/starts-with? fn-trace-name "map->"))) ;; don't instrument record constructors
@@ -806,6 +821,7 @@
      :trace-expr-exec trace-expr-exec
      :trace-bind trace-bind
 
+     :instrumented-fns (make-instrumented-fn-tracker)
      :macroexpand-1-fn macroexpand-1-fn
      :expand-symbol expand-symbol}))
 
@@ -819,17 +835,18 @@
         {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form env)
         tagged-form (utils/tag-form-recursively form ::coor)
         expanded-form (inst-utils/macroexpand-all macroexpand-1-fn expand-symbol tagged-form ::original-form)
-        inst-code (instrument-top-level-form expanded-form ctx)]
+        inst-result (instrument-top-level-form expanded-form ctx)]
 
     ;; Uncomment to debug
     ;; Printing on the *err* stream is important since
     ;; printing on standard output messes  with clojurescript macroexpansion
     #_(let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (clojure.pprint/pprint x)))]
-      (pprint-on-err "Input form : " form)
-      (pprint-on-err "Expanded form : " expanded-form)
-      (pprint-on-err "Instrumented form : " inst-code))
+        (pprint-on-err "Input form : " form)
+        (pprint-on-err "Expanded form : " expanded-form)
+        (pprint-on-err "Instrumented form : " inst-result))
 
-    inst-code))
+    (assoc inst-result
+           :instrumented-fns (-> ctx :instrumented-fns deref))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; For working at the repl ;;

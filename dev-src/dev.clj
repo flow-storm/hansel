@@ -52,14 +52,15 @@
   (hansel/with-ctx {:tracing-disabled? true}
     (factorial 5))
 
-  (hansel/instrument-namespaces-clj #{"clojure.set"}
-                                    '{:trace-form-init dev/print-form-init
-                                      :trace-fn-call dev/print-fn-call
-                                      :trace-fn-return dev/print-fn-return
-                                      :trace-expr-exec dev/print-expr-exec
-                                      :trace-bind dev/print-bind
-                                      :prefixes? false
-                                      :uninstrument? true})
+  (def r (hansel/instrument-namespaces-clj #{"clojure.set"}
+                                           '{:trace-form-init dev/print-form-init
+                                             :trace-fn-call dev/print-fn-call
+                                             :trace-fn-return dev/print-fn-return
+                                             :trace-expr-exec dev/print-expr-exec
+                                             :trace-bind dev/print-bind
+                                             :prefixes? false}))
+
+  (hansel/uninstrument-namespaces-clj #{"clojure.set"})
 
 
   ;; For trying in shadow clojure repl

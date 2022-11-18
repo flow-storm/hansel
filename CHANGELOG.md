@@ -4,6 +4,8 @@
 	
 ## New Features
 
+	- instrument-namespaces-* now returns the a map with :inst-fns and :affected-namespaces
+
 ### Changes
 
 ### Bugs fixed
@@ -22,7 +24,7 @@
 	
 ## New Features
 
-	- instrument-var-clj and instrument-var-shadow-cljs now accept :deep? true for recursively instrumenting referenced vars
+	- instrument-var-clj and instrument-var-shadow-cljs now accept :deep? true for recursively instrumenting referenced vars    
 	
 ### Changes
 
