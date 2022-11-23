@@ -809,7 +809,8 @@
 
 (defn instrument
 
-  "Recursively instrument a form for tracing."
+  "Instrument a form for tracing.
+  Returns a map with :inst-form and :init-forms."
 
   [{:keys [env] :as config} form]
   (let [form-ns (or (:ns config) (str (ns-name *ns*)))

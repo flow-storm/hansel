@@ -2,7 +2,7 @@
   (:require [hansel.instrument.forms :as inst-forms]
             [hansel.instrument.namespaces :as inst-ns]
             [hansel.instrument.utils :as inst-utils]
-            [hansel.utils :as utils]
+            [hansel.utils :as utils :refer [log log-error]]
             [hansel.instrument.runtime :as rt]
             [clojure.repl :as clj.repl]))
 
@@ -28,29 +28,61 @@
   (let [{:keys [init-forms inst-form]} (inst-forms/instrument (assoc config :env &env) form)]
     `(do ~@init-forms ~inst-form)))
 
+(defn- find-interesting-vars-references [resolve-symb ns-symb form]
+  (->> (tree-seq coll? seq form) ;; walk over code s-expressions
+       (keep (fn [x]
+               (when (and (seq? x)
+                          (symbol? (first x)))
+                 (when-let [vsymb (resolve-symb ns-symb (first x))]
+                   vsymb))))))
+
 (defn instrument-var-clj
 
   "Given a Clojure `var-symb` instrument it using `hansel.api/instrument-form`.
-  Check that one for `config` options."
+  Config options are the same as `hansel.api/instrument-form` plus
+  - :deep? When true recursively instrument all referenced vars (default to false)
+  - :skip-namespaces A set of namespaces to skip when instrumenting deeply."
 
-  [var-symb config]
+  ([var-symb config]
+   (let [*instrumented-set (atom #{})]
+     (instrument-var-clj var-symb config *instrumented-set)
+     @*instrumented-set))
 
-  (let [ns-symb (symbol (namespace var-symb))
-        form-ns (find-ns ns-symb)]
-    (binding [*ns* form-ns]
-      (let [form (some->> (clj.repl/source-fn var-symb)
-                          (read-string {:read-cond :allow}))]
-        (if form
+  ([var-symb {:keys [deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
+   (let [ns-symb (symbol (namespace var-symb))
+         form-ns (find-ns ns-symb)]
+     (log (format "Re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
+     (binding [*ns* form-ns]
+       (let [form (some->> (clj.repl/source-fn var-symb)
+                           (read-string {:read-cond :allow}))]
+         (if form
 
-          (let [v (find-var var-symb)
-                vmeta (meta v)] ;; save the var meta
-            (inst-ns/re-eval-form ns-symb form (merge inst-ns/clj-namespaces-config
-                                                      config))
+           (let [v (find-var var-symb)
+                 vmeta (meta v)] ;; save the var meta
+             (try
+               (inst-ns/re-eval-form ns-symb form (merge inst-ns/clj-namespaces-config
+                                                         config))
+               (catch clojure.lang.ExceptionInfo ei (log-error (format "Error re-evaluating %s %s" var-symb (pr-str (ex-data ei))))))
 
-            ;; restore the var meta
-            (alter-meta! v (constantly vmeta)))
+             ;; restore the var meta
+             (alter-meta! v (constantly vmeta))
 
-          (println (format "Couldn't find source for %s" var-symb)))))))
+             (swap! *instrumented-set conj var-symb)
+
+             (when deep?
+               (let [skip-namespaces (into #{"clojure.core"} skip-namespaces) ;; always skip clojure.core on deep instrumentation
+                     resolve-symb (fn resolve-symb [ns-symb symb]
+                                    (binding [*ns* (find-ns ns-symb)]
+                                      (when-let [v (resolve symb)]
+                                        (symbol v))))
+                     sub-vars (cond->> (find-interesting-vars-references resolve-symb ns-symb form)
+                                (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
+                 (when (pos? (count sub-vars))
+                   (doseq [sub-var-symb sub-vars]
+                     (when-not (contains? @*instrumented-set sub-var-symb)
+                       (instrument-var-clj sub-var-symb config *instrumented-set)))))))
+
+           (log (format "Couldn't find source for %s" var-symb))))))))
 
 (defn uninstrument-var-clj
 
@@ -98,23 +130,58 @@
 
   The :trace-* handlers should be fully qualified symbols of functions in the ClojureScript runtime."
 
-  [var-symb {:keys [build-id] :as config}]
+  ([var-symb config]
+   (let [*instrumented-set (atom #{})]
+     (instrument-var-shadow-cljs var-symb config *instrumented-set)
+     @*instrumented-set))
 
-  (let [ns-symb (symbol (namespace var-symb))
-        form (some->> (inst-utils/source-fn-cljs var-symb build-id)
-                      (read-string {:read-cond :allow}))
-        compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
-        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
-        cenv (compiler-env build-id)
-        aenv (empty-env)]
-    (if form
-      #_:clj-kondo/ignore
-      (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
-                          (inst-ns/re-eval-form ns-symb form (merge inst-ns/shadow-cljs-namespaces-config
-                                                                    config
-                                                                    {:env aenv})))
+  ([var-symb {:keys [build-id deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
 
-      (println (format "Couldn't find source for %s" var-symb)))))
+   (let [ns-symb (symbol (namespace var-symb))
+         form (some->> (inst-utils/source-fn-cljs var-symb build-id)
+                       (read-string {:read-cond :allow}))
+         compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+         empty-env (requiring-resolve 'cljs.analyzer/empty-env)
+         cenv (compiler-env build-id)
+         aenv (empty-env)]
+     (log (format "Re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
+     (if form
+       #_:clj-kondo/ignore
+       (do
+         (try
+           (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
+                               (inst-ns/re-eval-form ns-symb
+                                                     form
+                                                     (merge inst-ns/shadow-cljs-namespaces-config
+                                                            config
+                                                            {:env aenv})))
+           (catch Exception e (log-error (format "Error re-evaluating %s" var-symb) e)))
+         (swap! *instrumented-set conj var-symb)
+
+         (when deep?
+           (let [skip-namespaces (into #{"cljs.core"} skip-namespaces) ;; always skip cljs.core on deep instrumentation
+                 resolve-symb (fn resolve-symb [ns-symb symb]
+                                (let [cljs-ns (-> (compiler-env build-id)
+                                                  :cljs.analyzer/namespaces
+                                                  (get ns-symb))]
+                                  (if-let [symb-alias (namespace symb)]
+                                    (let [ns-reqs (:requires cljs-ns)
+                                          symb-ns(get ns-reqs (symbol symb-alias))]
+                                      (when symb-ns
+                                        (symbol (name symb-ns) (name symb))))
+
+                                    ;; el if it doesn't have an alias lets check defs
+                                    (let [ns-defs (:defs cljs-ns)]
+                                      (when (contains? ns-defs symb)
+                                        (symbol (name ns-symb) (name symb)))))))
+                 sub-vars (cond->> (find-interesting-vars-references resolve-symb ns-symb form)
+                            (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
+             (when (pos? (count sub-vars))
+               (doseq [sub-var-symb sub-vars]
+                 (when-not (contains? @*instrumented-set sub-var-symb)
+                   (instrument-var-shadow-cljs sub-var-symb config *instrumented-set)))))))
+
+       (println (format "Couldn't find source for %s" var-symb))))))
 
 (defn uninstrument-var-shadow-cljs
 

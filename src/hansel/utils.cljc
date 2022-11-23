@@ -99,3 +99,28 @@
    (defn println-err [& args]
      (binding [*out* *err*]
        (apply println args))))
+
+#?(:clj (def out-print-writer *out*))
+
+#?(:clj
+   (defn log [& msgs]
+     (binding [*out* out-print-writer]
+       (apply println msgs)))
+   :cljs
+   (defn log [& msgs]
+     (apply js/console.log msgs)))
+
+#?(:clj
+   (defn log-error
+     ([msg] (binding [*out* *err*]
+              (println msg)))
+     ([msg e]
+      (binding [*out* *err*]
+        (println msg)
+        (.printStackTrace e))))
+   :cljs
+   (defn log-error
+     ([msg] (js/console.error msg))
+     ([msg e]
+      (js/console.error msg e))))
+

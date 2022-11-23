@@ -34,29 +34,53 @@
                     trace-expr-exec (fn [data] (swap! trace-count inc) (:result data))]
 
         ;; instrument first time
-        (hansel/instrument-var-clj 'clojure.set/difference inst-config)
-        ;; call the instrumented function
-        (set/difference #{1 2 3} #{2})
+        (let [inst-set (hansel/instrument-var-clj 'clojure.set/join inst-config)]
+          ;; call the instrumented function
+          (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-        (is (= 15 @trace-count) "Instrumented var should generate traces")
+          (is (= 61 @trace-count) "Instrumented var should generate traces")
+
+          (is (= '#{ clojure.set/join} inst-set)
+              "Instrumeting var with deep? false should only instrument required var"))
 
         ;; UNinstrument
-        (hansel/uninstrument-var-clj 'clojure.set/difference)
+        (let [un-inst-set (hansel/uninstrument-var-clj 'clojure.set/join)]
+          (is (= '#{ clojure.set/join} un-inst-set)
+              "Uninstrumeting var with deep? false should only instrument required var")
 
-        ;; call the UNinstrumented function
-        (set/difference #{1 2 3} #{2})
+          ;; call the UNinstrumented function
+          (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-        (is (= 15 @trace-count) "Uninstrumented var should NOT generate traces")
+          (is (= 61 @trace-count) "Uninstrumented var should NOT generate traces"))
 
-        ;; Instrument again (to check we didn't lost anything and we can do this indefinetly)
-        (hansel/instrument-var-clj 'clojure.set/difference inst-config)
-        ;; call the instrumented function
-        (set/difference #{1 2 3} #{2})
+        ;; Instrument again this time deeply
+        (let [inst-set (hansel/instrument-var-clj 'clojure.set/join (assoc inst-config
+                                                                           :deep? true))]
 
-        (is (= 30 @trace-count) "Re instrumented var should generate traces")
+          (is (= '#{clojure.set/bubble-max-key
+                    clojure.set/index
+                    clojure.set/intersection
+                    clojure.set/join
+                    clojure.set/map-invert
+                    clojure.set/rename-keys}
+                 inst-set)
+              "Instrumeting var with deep? true should instrument all sub-vars")
+
+          ;; call the instrumented function
+          (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
+
+          (is (= 150 @trace-count) "Re instrumented var should generate traces"))
 
         ;; finally leave the fn uninstrumented
-        (hansel/uninstrument-var-clj 'clojure.set/difference)))))
+        (let [un-inst-set (hansel/uninstrument-var-clj 'clojure.set/join {:deep? true})]
+          (is (= '#{clojure.set/bubble-max-key
+                    clojure.set/index
+                    clojure.set/intersection
+                    clojure.set/join
+                    clojure.set/map-invert
+                    clojure.set/rename-keys}
+                 un-inst-set)
+              "Uninstrumeting var with deep? true should uninstrument all sub-vars"))))))
 
 (deftest instrument-var-shadow-cljs
 
@@ -79,14 +103,15 @@
   (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt1 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
   (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt1 update :trace-bind inc))" {:ns 'cljs.user})
 
-  (hansel/instrument-var-shadow-cljs
-   'hansel.instrument.tester/factorial
-   '{:trace-form-init cljs.user/count-form-init
-     :trace-fn-call cljs.user/count-fn-call
-     :trace-fn-return cljs.user/count-fn-return
-     :trace-expr-exec cljs.user/count-expr-exec
-     :trace-bind cljs.user/count-bind
-     :build-id :node-repl})
+  (let [inst-set (hansel/instrument-var-shadow-cljs
+                  'hansel.instrument.tester/factorial
+                  '{:trace-form-init cljs.user/count-form-init
+                    :trace-fn-call cljs.user/count-fn-call
+                    :trace-fn-return cljs.user/count-fn-return
+                    :trace-expr-exec cljs.user/count-expr-exec
+                    :trace-bind cljs.user/count-bind
+                    :build-id :node-repl})]
+    (is (= inst-set #{'hansel.instrument.tester/factorial}) "Shallow instrumentation should only instrument requested var"))
 
   (testing "ClojureScript var instrumentation/uninstrumentation"
 
@@ -108,9 +133,24 @@
                    read-string))
         "Traces count should be correct")
 
-    (hansel/uninstrument-var-shadow-cljs
-     'hansel.instrument.tester/factorial
-     {:build-id :node-repl})
+    (let [inst-set (hansel/instrument-var-shadow-cljs
+                      'hansel.instrument.tester/boo
+                      '{:trace-form-init cljs.user/count-form-init
+                        :trace-fn-call cljs.user/count-fn-call
+                        :trace-fn-return cljs.user/count-fn-return
+                        :trace-expr-exec cljs.user/count-expr-exec
+                        :trace-bind cljs.user/count-bind
+                        :build-id :node-repl
+                        :deep? true})]
+      (is (= '#{hansel.instrument.tester/boo
+                hansel.instrument.tester/->ARecord
+                hansel.instrument.tester/add
+                hansel.instrument.tester/do-it
+                hansel.instrument.tester/multi-arity
+                hansel.instrument.tester/other-function
+                hansel.instrument.tester/sub}
+             inst-set)
+          "Deep instrumentation should instrument all"))
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
 

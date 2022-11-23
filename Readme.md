@@ -111,6 +111,28 @@ It is ment as a platform to build tooling that depends on code instrumentation, 
 (clojure.set/difference #{1 2 3} #{2})
 ```
 
+### Vars and deep instrumentation
+
+You can instrument any var by using `hansel/instrument-var-clj` like this :
+```clojure
+(hansel/instrument-var-clj
+   'clojure.set/join
+   '{:trace-form-init dev/print-form-init
+     :trace-fn-call dev/print-fn-call
+     :trace-fn-return dev/print-fn-return
+     :trace-expr-exec dev/print-expr-exec
+     :trace-bind dev/print-bind
+     :deep? true}) ;; deep? is nil by default
+
+;; it will return all the instrumented vars
+;; => #{clojure.set/bubble-max-key
+        clojure.set/index
+        clojure.set/intersection
+        clojure.set/join
+        clojure.set/map-invert
+        clojure.set/rename-keys}
+```
+
 ## ClojureScript
 
 ### ClojureScript namespaces instrumentation (shadow-cljs only)
@@ -146,6 +168,9 @@ Now go back to your ClojureScript repl and run :
 ```
 cljs.user> (clojure.set/difference #{1 2 3} #{2})
 ```
+
+There is also `hansel.api/instrument-var-shadow-cljs` which works exactly like the Clojure version but 
+the config also needs a `:build-id`.
 
 ## The coordinate system
 

@@ -3,7 +3,9 @@
 ## master (unreleased)
 	
 ## New Features
-    
+
+	- instrument-var-clj and instrument-var-shadow-cljs now accept :deep? true for recursively instrumenting referenced vars
+	
 ### Changes
 
 ### Bugs fixed
