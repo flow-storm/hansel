@@ -14,8 +14,7 @@
    [clojure.string :as str]
    [hansel.instrument.runtime :refer [*runtime-ctx*]]
    [hansel.utils :as utils]
-   [hansel.instrument.utils :as inst-utils]
-   [clojure.core.async :as async]))
+   [hansel.instrument.utils :as inst-utils]))
 
 
 (declare instrument-outer-form)
@@ -585,9 +584,9 @@
   (or (special-symbol? symb)
       (#{'defrecord* 'js*} symb)))
 
-(defn- instrument-core-async-go-block [form ctx]
-  `(clojure.core.async/go
-     ~@(map #(instrument-form-recursively % ctx) (rest form))))
+(defn- instrument-core-async-go-block [[go-symb :as form] ctx]
+  `(~go-symb
+    ~@(map #(instrument-form-recursively % ctx) (rest form))))
 
 (defn- instrument-function-like-form
 
@@ -601,7 +600,7 @@
 
     (cond
 
-      (= name 'clojure.core.async/go)
+      (#{'clojure.core.async/go 'cljs.core.async/go} name)
       (instrument-core-async-go-block form ctx)
 
       ;; If special form, thread with care.
