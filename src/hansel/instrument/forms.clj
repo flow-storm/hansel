@@ -584,9 +584,12 @@
   (or (special-symbol? symb)
       (#{'defrecord* 'js*} symb)))
 
-(defn- instrument-core-async-go-block [[go-symb :as form] ctx]
-  `(~go-symb
-    ~@(map #(instrument-form-recursively % ctx) (rest form))))
+(defn- instrument-core-async-go-block [form {:keys [compiler] :as ctx}]
+  (let [go-symb (case compiler
+                  :clj  'clojure.core.async/go
+                  :cljs 'cljs.core.async/go)]
+    `(~go-symb
+      ~@(map #(instrument-form-recursively % ctx) (rest form)))))
 
 (defn- instrument-function-like-form
 
