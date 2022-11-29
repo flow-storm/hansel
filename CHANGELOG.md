@@ -8,6 +8,14 @@
 
 ### Bugs fixed
 
+## 0.1.22 (29-11-2022)
+	
+## New Features
+
+### Changes
+
+### Bugs fixed
+
 	- Fix ClojureScript go blocks instrumentation
 	
 ## 0.1.20 (23-11-2022)
