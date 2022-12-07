@@ -184,6 +184,36 @@ So the coordinate `[3 2]` in the form :
 
 refers to the `b` symbol in `(+ a b)` which is under coordinate `[3]`.
 
+## How do I relate fn-return to its fn-call?
+
+Hansel isn't tracking what is the current fn call per thread, so it can't tell you what was the fn-call for your current
+fn-return, but you can do it pretty easily but keeping track of it yourself:
+
+```clojure
+(def threads-stacks (atom {}))
+
+(defn push-thread-frame [stacks thread-id data]
+  (swap! stacks update thread-id conj data))
+
+(defn pop-thread-frame [stacks thread-id]
+  (swap! stacks update thread-id pop))
+
+(defn peek-thread-frame [stacks thread-id]
+  (peek (get @stacks thread-id)))
+
+(defn trace-fn-call [fn-call-data]
+  (let [curr-thread-id (.getId (Thread/currentThread))]
+    (push-thread-frame threads-stacks curr-thread-id fn-call-data)))
+
+(defn trace-fn-return [{:keys [return]}]
+  (let [curr-thread-id (.getId (Thread/currentThread))
+        frame-data (peek-thread-frame threads-stacks curr-thread-id)]
+
+    (println "RETURNING " return "for fn-call" frame-data)
+
+    (pop-thread-frame threads-stacks curr-thread-id))
+  return)
+```
 ## Projects currently using Hansel
 
 - [FlowStorm debugger](https://github.com/jpmonettas/flow-storm-debugger)
