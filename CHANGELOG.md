@@ -4,6 +4,14 @@
 	
 ## New Features
 
+### Changes
+
+### Bugs fixed
+
+## 0.1.26 (08-12-2022)
+	
+## New Features
+
 	- instrument-namespaces-* now returns the a map with :inst-fns and :affected-namespaces
 
 ### Changes
