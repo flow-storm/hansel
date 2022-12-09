@@ -4,6 +4,8 @@
 	
 ## New Features
 
+	- Add normalize-gensyms? undocumented config option
+	
 ### Changes
 
 ### Bugs fixed

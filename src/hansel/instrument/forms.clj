@@ -789,7 +789,8 @@
      ~@(-> preamble
            (into [(instrument-expression-form (conj forms 'do) [] (assoc ctx :outer-form? true))]))))
 
-(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
+(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind
+                                               trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
   (let [form-id (hash form)
         compiler (inst-utils/compiler-from-env env)
         [macroexpand-1-fn expand-symbol] (case compiler
@@ -825,13 +826,54 @@
      :macroexpand-1-fn macroexpand-1-fn
      :expand-symbol expand-symbol}))
 
+(defn- normalize-gensyms
+
+  "When the reader reads things like #(+ % %) it uses a global id to generate symbols,
+  so everytime will read something different, like :
+
+  (fn* [p1__37935#] (+ p1__37935# p1__37935#))
+  (fn* [p1__37939#] (+ p1__37939# p1__37939#))
+
+  Normalize symbol can be applied to generate things like :
+
+  (fn* [p__0] (+ p__0 p__0)).
+
+  Useful for generating stable form hashes."
+
+  [form]
+  (let [psym->id (atom {})
+        gensym? (fn [x]
+                  (and (symbol? x)
+                       (re-matches #"^p([\d])__([\d]+)#$" (name x))))
+        normal (fn [psym]
+                 (let [ids @psym->id
+                       nsymid (if-let [id (get ids psym)]
+                                id
+
+                                (if (empty? ids)
+                                  0
+                                  (inc (apply max (vals ids)))))]
+
+                   (swap! psym->id assoc psym nsymid)
+
+                   (symbol (str "p__" nsymid))))]
+    (walk/postwalk
+     (fn [x]
+       (if (gensym? x)
+         (normal x)
+         x))
+     form)))
+
 (defn instrument
 
   "Instrument a form for tracing.
   Returns a map with :inst-form and :init-forms."
 
-  [{:keys [env] :as config} form]
-  (let [form-ns (or (:ns config) (str (ns-name *ns*)))
+  [{:keys [env normalize-gensyms?] :as config} form]
+  (let [form (if normalize-gensyms?
+               (normalize-gensyms form)
+               form)
+        form-ns (or (:ns config) (str (ns-name *ns*)))
         {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form env)
         tagged-form (utils/tag-form-recursively form ::coor)
         expanded-form (inst-utils/macroexpand-all macroexpand-1-fn expand-symbol tagged-form ::original-form)
