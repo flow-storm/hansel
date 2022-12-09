@@ -3,6 +3,14 @@
 ## master (unreleased)
 	
 ## New Features
+    
+### Changes
+
+### Bugs fixed
+
+## 0.1.29 (09-12-2022)
+	
+## New Features
 
 	- Add normalize-gensyms? undocumented config option
 	
