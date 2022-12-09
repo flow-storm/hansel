@@ -50,15 +50,19 @@
           (.printStackTrace e))))))
 
 (defn files-for-ns-fn-clj [ns-symb _]
-  (let [ns-vars (vals (ns-interns (find-ns ns-symb)))]
-    (->> ns-vars
-         (keep (fn [v]
-                 (let [file-name (:file (meta v))
-                       file (when file-name
-                              (or (io/resource file-name)
-                                  (.toURL (io/file file-name))))]
-                   file)))
-         (into #{}))))
+  (let [ns-vars (vals (ns-interns (find-ns ns-symb)))
+        r (->> ns-vars
+               (keep (fn [v]
+                       (let [file-name (:file (meta v))
+                             file (when (and file-name
+                                             (or
+                                              (str/ends-with? file-name ".clj")
+                                              (str/ends-with? file-name ".cljc")))
+                                    (or (io/resource file-name)
+                                        (.toURL (io/file file-name))))]
+                         file)))
+               (into #{}))]
+    r))
 
 (defn files-for-ns-fn-cljs  [ns-symb {:keys [build-id]}]
   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
@@ -67,7 +71,10 @@
                       ;; this is to cover for a weird intermitent case
                       ;; where ns :meta :file is nil
                       (some-> ns :defs vals first :meta :file))
-        file (when file-name
+        file (when (and file-name
+                        (or
+                         (str/ends-with? file-name ".cljs")
+                         (str/ends-with? file-name ".cljc")))
                (or (io/resource file-name)
                    (.toURL (io/file file-name))))]
     (when file
