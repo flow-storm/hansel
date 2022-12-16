@@ -8,6 +8,14 @@
 
 ### Bugs fixed
 
+## 0.1.31 (16-12-2022)
+	
+## New Features
+    
+### Changes
+
+### Bugs fixed
+
 - Fix important compilation error when ClojureScript isn't in the path
 
 ## 0.1.29 (09-12-2022)
