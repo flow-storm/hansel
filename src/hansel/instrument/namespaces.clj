@@ -85,7 +85,7 @@
     (cond
 
       ;; known issue, using recur inside fn* (without loop*)
-      (str/includes? e-msg "recur")
+      (and e-msg (str/includes? e-msg "recur"))
       {:type :known-error
        :msg "We can't yet instrument using recur inside fn* (without loop*)"}
 
@@ -124,11 +124,15 @@
            (eval-in-ns-fn ns-symb form config)
            #{})
 
-         (let [{:keys [init-forms inst-form instrumented-fns]}
-               #_:clj-kondo/ignore
-               (binding [*ns* (find-ns ns-symb)] ;; bind ns for clojure
-                 (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb] ;; bind ns for clojurescript
-                                     (inst-forms/instrument inst-opts form)))]
+         (let [{:keys [init-forms inst-form instrumented-fns]} (case compiler
+                                                                 :cljs
+                                                                 #_:clj-kondo/ignore
+                                                                 (binding [*ns* (find-ns ns-symb)]
+                                                                   (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb] ;; bind ns for clojurescript
+                                                                                       (inst-forms/instrument inst-opts form)))
+
+                                                                 :clj (binding [*ns* (find-ns ns-symb)] ;; bind ns for clojure
+                                                                        (inst-forms/instrument inst-opts form)))]
            (case compiler
 
              ;; for ClojureScript we are instrumenting the form twice,

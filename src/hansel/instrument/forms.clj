@@ -167,12 +167,11 @@
 
   "Instrument lets and loops bindings right side recursively."
 
-  [[name & args :as form] {:keys [disable] :as ctx}]
+  [[name & args :as form] ctx]
 
   (let [bindings (->> (first args)
                       (partition 2))
-        inst-bindings-vec (if (or (disable :binding)
-                                  (#{'loop* 'letfn*} name))
+        inst-bindings-vec (if (#{'loop* 'letfn*} name)
                             ;; don't mess with the bindings for loop* and letfn*
                             ;; letfn* doesn't make sense since all the bindings are fns and
                             ;; there is nothing to see there.
@@ -188,8 +187,7 @@
                                            (-> [symb (instrument-form-recursively x ctx)]
                                                (into ['_ (bind-tracer symb (-> form meta ::coor) ctx)]))))
                                  vec))
-        inst-body (if (and (= name 'loop*)
-                           (not (disable :bindings)))
+        inst-body (if (= name 'loop*)
                     ;; if it is a loop* form we can still add bind traces to the body
                     (let [loop-binding-traces (->> bindings
                                                    (map (fn [[symb _]]
