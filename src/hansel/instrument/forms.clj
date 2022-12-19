@@ -317,7 +317,7 @@
     :clj (let [[a1 a2 a3 a4 a5 & ar] args
                inst-a5-map (->> a5
                                 (map (fn [[k [v1 v2]]] [k [v1 (instrument-form-recursively v2 ctx)]]))
-                                (into {}))]
+                                (into (sorted-map)))]
            `(~a1 ~a2 ~a3 ~(instrument-form-recursively a4 ctx) ~inst-a5-map ~@ar))
     :cljs (let [[a1 left-vec right-vec else] args]
             `(~a1 ~left-vec ~(instrument-coll right-vec ctx) ~(instrument-form-recursively else ctx)))))

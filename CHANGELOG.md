@@ -6,6 +6,8 @@
     
 ### Changes
 
+	- Do not automatically convert big maps into sorted maps while instrumenting them
+	
 ### Bugs fixed
 
 ## 0.1.31 (16-12-2022)

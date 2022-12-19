@@ -1,6 +1,14 @@
 (ns dev
   (:require [hansel.api :as hansel]
-            [hansel.instrument.runtime :refer [*runtime-ctx*]]))
+            [hansel.instrument.runtime :refer [*runtime-ctx*]]
+            [clojure.tools.namespace.repl :as tools-namespace-repl]))
+
+(defn after-refresh []
+  (println "Refresh done"))
+
+(defn refresh []
+  (tools-namespace-repl/refresh :after 'dev/after-refresh))
+
 
 (defn print-form-init [data]
   (println "[form-init] data:" data ", ctx: " *runtime-ctx*))
