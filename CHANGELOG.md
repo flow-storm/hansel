@@ -6,6 +6,7 @@
     
 ### Changes
 
+	- Don't instrument record map forms which breaks some macroexpansions
 	- Do not automatically convert big maps into sorted maps while instrumenting them
 	
 ### Bugs fixed

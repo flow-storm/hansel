@@ -38,12 +38,15 @@
                                             (walk-indexed (conj coor (inc (* 2 i))) f v)])
                                          map))
          result (cond
+                  
                   ;; Clojure uses array-maps up to some map size (8 currently), which are sorted.
                   ;; So for small maps we take advantage of that.
                   ;; We will not be able to walk with coordinates over maps with more than 8
                   ;; keys since they are unordered. We have the same issue
-                  ;; as with sets here. 
-                  (map? form) (if (<= (count form) 8)
+                  ;; as with sets here.
+                  ;; If for is a record we also skip instrumentation for now
+                  (map? form) (if (and (<= (count form) 8)
+                                       (not (record? form)))
                                 (into {} (walk-indexed-map form))
                                 form)
                   ;; Order of sets is unpredictable, unfortunately, so we don't know the coords
