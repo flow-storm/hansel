@@ -30,7 +30,7 @@
 
 (defn file-forms-fn-clj [ns-symb file-url _]
   (binding [*ns* (find-ns ns-symb)]
-    (->> (format "[%s]" (slurp file-url))
+    (->> (format "[%s\n]" (slurp file-url))
         (read-string {:read-cond :allow}))))
 
 (defn file-forms-fn-cljs  [ns-symb file-url {:keys [build-id]}]
