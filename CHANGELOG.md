@@ -6,8 +6,17 @@
     
 ### Changes
 	
-### Bugs fixed
+### Bugs fixed	
 
+## 0.1.38 (29-01-2023)
+	
+## New Features
+    
+### Changes
+	
+### Bugs fixed
+	
+	- Fix instrumenting namespaces that ends with a comment and no new line
 	- Fix instrument-var-clj for loaded files 
 
 ## 0.1.35 (26-12-2022)
