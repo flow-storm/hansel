@@ -53,7 +53,7 @@
          form-ns (find-ns ns-symb)]
      (log (format "Re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (binding [*ns* form-ns]
-       (let [form (some->> (clj.repl/source-fn var-symb)
+       (let [form (some->> (inst-utils/source-fn var-symb)
                            (read-string {:read-cond :allow}))]
          (if form
 

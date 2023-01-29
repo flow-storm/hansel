@@ -8,6 +8,8 @@
 	
 ### Bugs fixed
 
+	- Fix instrument-var-clj for loaded files 
+
 ## 0.1.35 (26-12-2022)
 	
 ## New Features
