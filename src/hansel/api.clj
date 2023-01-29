@@ -3,8 +3,7 @@
             [hansel.instrument.namespaces :as inst-ns]
             [hansel.instrument.utils :as inst-utils]
             [hansel.utils :as utils :refer [log log-error]]
-            [hansel.instrument.runtime :as rt]
-            [clojure.repl :as clj.repl]))
+            [hansel.instrument.runtime :as rt]))
 
 
 (defn instrument-form
