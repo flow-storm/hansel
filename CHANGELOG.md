@@ -5,7 +5,10 @@
 ## New Features
     
 ### Changes
-	
+
+	- When re-evaluating vars in clj, use the namespace from the var meta, intead of the one from the var symbol.
+      This fixes code instrumentation like where potemkin/import-vars is used.
+	  
 ### Bugs fixed	
 
 ## 0.1.38 (29-01-2023)

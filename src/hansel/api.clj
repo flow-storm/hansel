@@ -57,8 +57,14 @@
          (if form
 
            (let [v (find-var var-symb)
-                 vmeta (meta v)] ;; save the var meta
+                 vmeta (meta v) ;; save the var meta
+                 ;; use the namespace from the var meta instead of the one
+                 ;; from the symbol.
+                 ;; Some times they will not be the same, like in the case of using
+                 ;; potemkin/import-vars
+                 ns-symb (or (-> vmeta :ns ns-name) ns-symb)]
              (try
+
                (inst-ns/re-eval-form ns-symb form (merge inst-ns/clj-namespaces-config
                                                          config))
                (catch clojure.lang.ExceptionInfo ei (log-error (format "Error re-evaluating %s %s" var-symb (pr-str (ex-data ei))))))
