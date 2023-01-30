@@ -11,6 +11,8 @@
 	  
 ### Bugs fixed	
 
+	- Fix instrument-var-clj resolve-sym which was causing issues with deep instrumentation
+
 ## 0.1.38 (29-01-2023)
 	
 ## New Features

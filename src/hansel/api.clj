@@ -79,7 +79,8 @@
                      resolve-symb (fn resolve-symb [ns-symb symb]
                                     (binding [*ns* (find-ns ns-symb)]
                                       (when-let [v (resolve symb)]
-                                        (symbol v))))
+                                        (when (var? v)
+                                          (symbol v)))))
                      sub-vars (cond->> (find-interesting-vars-references resolve-symb ns-symb form)
                                 (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
                  (when (pos? (count sub-vars))
