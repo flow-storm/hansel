@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [hansel.utils :as utils])
-  (:import [java.io StringReader LineNumberReader InputStreamReader PushbackReader]
+  (:import [java.io StringReader InputStreamReader]
+           [clojure.lang LineNumberingPushbackReader]
            [clojure.lang RT]))
 
 (declare macroexpand-all)
@@ -220,31 +221,24 @@
 
       expanded-with-meta)))
 
-(defn source-fn
-
-  "Like clojure.repl/source-fn but looks for the source using :file meta first
-  as a resource and then on the filesystem."
-
-  [x]
+(defn source-form
+  [vsymb]
   (try
-    (when-let [v (resolve x)]
+    (when-let [v (resolve vsymb)]
       (when-let [filepath (:file (meta v))]
         (let [strm (or (.getResourceAsStream (RT/baseLoader) filepath)
-                       (io/input-stream filepath))]
-          (when str
-            (with-open [rdr (LineNumberReader. (InputStreamReader. strm))]
-              (dotimes [_ (dec (:line (meta v)))] (.readLine rdr))
-              (let [text (StringBuilder.)
-                    pbr (proxy [PushbackReader] [rdr]
-                          (read [] (let [i (proxy-super read)]
-                                     (.append text (char i))
-                                     i)))
-                    read-opts (if (.endsWith ^String filepath "cljc") {:read-cond :allow} {})]
-                (if (= :unknown *read-eval*)
-                  (throw (IllegalStateException. "Unable to read source while *read-eval* is :unknown."))
-                  (read read-opts (PushbackReader. pbr)))
-                (str text))
-              )))))
+                       (io/input-stream filepath))
+              var-ns (.-ns v)
+              var-def-line (:line (meta v))]
+          (when strm
+            (with-open [rdr (LineNumberingPushbackReader. (InputStreamReader. strm))]
+              (loop [prev-line (.getLineNumber rdr)]
+                (let [form (binding [*ns* var-ns]
+                             (read rdr))
+                      new-line (.getLineNumber rdr)]
+                  (if (<= prev-line var-def-line new-line)
+                    form
+                    (recur new-line)))))))))
     (catch Exception _ nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
