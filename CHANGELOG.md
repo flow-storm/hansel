@@ -6,6 +6,14 @@
     
 ### Changes
 
+### Bugs fixed 
+
+## 0.1.44 (02-02-2023)
+	
+## New Features
+    
+### Changes
+
 	- Improve instrument-var-clj to support instrumenting vars like foo when (let [...] (defn foo [] ...))
 
 ### Bugs fixed 
