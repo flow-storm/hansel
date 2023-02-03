@@ -114,11 +114,12 @@
 
   (when-not (or (nil? trace-bind)
                 (uninteresting-symb? symb))
-    `(~trace-bind
-      {:symb (quote ~symb)
-       :val ~symb
-       :coor ~coor
-       :form-id ~(:form-id ctx)})))
+    (let [symb (with-meta symb {})]
+      `(~trace-bind
+        {:symb (quote ~symb)
+         :val ~symb
+         :coor ~coor
+         :form-id ~(:form-id ctx)}))))
 
 (defn- args-bind-tracers
 
@@ -140,7 +141,10 @@
 
   [args]
 
-  (into [] (remove #(#{'&} %) args)))
+  (->> args
+       (remove #(#{'&} %))
+       (map #(with-meta % {}))
+       (into [])))
 
 (defn- instrument-special-dot [args ctx]
   (list* (first args)

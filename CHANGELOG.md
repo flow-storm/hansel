@@ -6,8 +6,10 @@
     
 ### Changes
 
+	- Remove type hints from symbols on trace-bind and trace-fn-call since they cause issues when re-evaluating on clojure 1.10
+	
 ### Bugs fixed 
-
+    
 ## 0.1.44 (02-02-2023)
 	
 ## New Features
