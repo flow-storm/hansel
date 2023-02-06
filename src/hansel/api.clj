@@ -30,9 +30,8 @@
 (defn- find-interesting-vars-references [resolve-symb ns-symb form]
   (->> (tree-seq coll? seq form) ;; walk over code s-expressions
        (keep (fn [x]
-               (when (and (seq? x)
-                          (symbol? (first x)))
-                 (when-let [vsymb (resolve-symb ns-symb (first x))]
+               (when (symbol? x)
+                 (when-let [vsymb (resolve-symb ns-symb x)]
                    vsymb))))))
 
 (defn instrument-var-clj

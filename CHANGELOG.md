@@ -6,6 +6,8 @@
     
 ### Changes
 	
+	- Improve hansel.api/instrument-var-clj deep instrumentation
+	
 ## 0.1.46 (03-02-2023)
 	
 ## New Features
