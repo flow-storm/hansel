@@ -148,12 +148,20 @@
       form
       (macroexpand+ macroexpand-1-fn ex))))
 
+(defn- specter-path-form? [expand-symbol form]
+  (and (seq? form)
+       (let [[x] form]
+         (and
+          (symbol? x)
+          (= "path" (name x)) ;; this is here for perf reasons, so we don't expand on every symbol
+          (#{'com.rpl.specter/path}  (expand-symbol x))))))
+
 (defn- core-async-go-loop-form? [expand-symbol form]
   (and (seq? form)
        (let [[x] form]
          (and
           (symbol? x)
-          (= "go-loop" (name x))
+          (= "go-loop" (name x)) ;; this is here for perf reasons, so we don't expand on every symbol
           (#{'clojure.core.async/go-loop 'cljs.core.async/go-loop}  (expand-symbol x))))))
 
 (defn- macroexpand-core-async-go [macroexpand-1-fn expand-symbol form original-key]
@@ -194,6 +202,12 @@
   [macroexpand-1-fn expand-symbol form & [original-key]]
 
   (cond
+
+    ;; don't macroexpand com.rpl.specter/path since for weird macroexpansion and var resolving reasons
+    ;; it fails if we try to evaluate the macroexpansion of path
+    (specter-path-form? expand-symbol form)
+    form
+
     (core-async-go-form? expand-symbol form)
     (macroexpand-core-async-go macroexpand-1-fn expand-symbol form original-key)
 

@@ -8,6 +8,8 @@
 	    	
 ### Bugs fixed 
 
+	- Fix specter com.rpl.specter/path macroexpansion issue by skipping path macroexpansion
+
 ## 0.1.48 (06-02-2023)
 	
 ## New Features
