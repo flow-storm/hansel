@@ -5,7 +5,9 @@
 ## New Features
     
 ### Changes
-	    	
+
+	- Updating tools.namespace
+  
 ### Bugs fixed
 
 ## 0.1.50 (16-02-2023)
