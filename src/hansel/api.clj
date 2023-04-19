@@ -27,11 +27,11 @@
   (let [{:keys [init-forms inst-form]} (inst-forms/instrument (assoc config :env &env) form)]
     `(do ~@init-forms ~inst-form)))
 
-(defn- find-interesting-vars-references [resolve-symb ns-symb form]
+(defn- find-interesting-vars-references [resolve-fn-symb ns-symb form]
   (->> (tree-seq coll? seq form) ;; walk over code s-expressions
        (keep (fn [x]
                (when (symbol? x)
-                 (when-let [vsymb (resolve-symb ns-symb x)]
+                 (when-let [vsymb (resolve-fn-symb ns-symb x)]
                    vsymb))))))
 
 (defn instrument-var-clj
@@ -49,7 +49,7 @@
   ([var-symb {:keys [deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
    (let [ns-symb (symbol (namespace var-symb))
          form-ns (find-ns ns-symb)]
-     (log (format "Re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
+     (log (format "Clojure re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (binding [*ns* form-ns]
        (let [form (inst-utils/source-form var-symb)]
          (if form
@@ -74,12 +74,12 @@
 
              (when deep?
                (let [skip-namespaces (into #{"clojure.core"} skip-namespaces) ;; always skip clojure.core on deep instrumentation
-                     resolve-symb (fn resolve-symb [ns-symb symb]
-                                    (binding [*ns* (find-ns ns-symb)]
+                     resolve-fn-symb (fn resolve-fn-symb [ns-symb symb]
+                                       (binding [*ns* (find-ns ns-symb)]
                                       (when-let [v (resolve symb)]
-                                        (when (var? v)
+                                        (when (and (var? v) (fn? (deref v)))
                                           (symbol v)))))
-                     sub-vars (cond->> (find-interesting-vars-references resolve-symb ns-symb form)
+                     sub-vars (cond->> (find-interesting-vars-references resolve-fn-symb ns-symb form)
                                 (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
                  (when (pos? (count sub-vars))
                    (doseq [sub-var-symb sub-vars]
@@ -99,24 +99,25 @@
 (defn instrument-namespaces-clj
 
   "Instrument entire namespaces.
-  `ns-prefixes` should be a set of ns name prefixes, like : #{\"cljs.\"}
+  `namespaces-set` should be a set of ns name prefixes, like : #{\"cljs.\"}
 
   `config` should be a map optionally containing all the keys for `hansel.api/instrument-form`
   plus :
   - :verbose? true or false to indicate verbose logging
   - :excluding-ns a set of namepsaces names as string to be excluded from instrumentation
   - :excluding-fns a set of fully cualified fn symbols to be excluded from instrumentation
+  - :prefixes? true or false indicate if `namespaces-set` namespaces should be treated as prefixes or not, defaults to true
 
   Returns a map with :
   - :inst-fns the set of instrumented fns
   - :affected-namespaces the set of affected namespaces
   "
 
-  [ns-prefixes config]
+  [namespaces-set config]
 
-  (inst-ns/instrument-files-for-namespaces ns-prefixes
-                                           (merge config
-                                                  {:prefixes? true}
+  (inst-ns/instrument-files-for-namespaces namespaces-set
+                                           (merge {:prefixes? true}
+                                                  config
                                                   inst-ns/clj-namespaces-config)))
 
 (defn uninstrument-namespaces-clj
@@ -128,7 +129,7 @@
   ([ns-prefixes config]
    (instrument-namespaces-clj ns-prefixes (assoc config
                                                  :uninstrument? true
-                                                 :prefixes true))))
+                                                 :prefixes? true))))
 
 (defn instrument-var-shadow-cljs
 
@@ -153,7 +154,7 @@
          empty-env (requiring-resolve 'cljs.analyzer/empty-env)
          cenv (compiler-env build-id)
          aenv (empty-env)]
-     (log (format "Re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
+     (log (format "Shadow re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (if form
        #_:clj-kondo/ignore
        (do
@@ -169,21 +170,25 @@
 
          (when deep?
            (let [skip-namespaces (into #{"cljs.core"} skip-namespaces) ;; always skip cljs.core on deep instrumentation
-                 resolve-symb (fn resolve-symb [ns-symb symb]
-                                (let [cljs-ns (-> (compiler-env build-id)
-                                                  :cljs.analyzer/namespaces
-                                                  (get ns-symb))]
-                                  (if-let [symb-alias (namespace symb)]
-                                    (let [ns-reqs (:requires cljs-ns)
-                                          symb-ns(get ns-reqs (symbol symb-alias))]
-                                      (when symb-ns
-                                        (symbol (name symb-ns) (name symb))))
+                 resolve-fn-symb (fn resolve-fn-symb [ns-symb symb]
+                                   (let [cljs-ns (-> (compiler-env build-id)
+                                                     :cljs.analyzer/namespaces
+                                                     (get ns-symb))]
+                                     (if-let [symb-alias (namespace symb)]
+                                       (let [ns-reqs (:requires cljs-ns)
+                                             symb-ns (get ns-reqs (symbol symb-alias))]
+                                         (when symb-ns
+                                           (symbol (name symb-ns) (name symb))))
 
-                                    ;; el if it doesn't have an alias lets check defs
-                                    (let [ns-defs (:defs cljs-ns)]
-                                      (when (contains? ns-defs symb)
-                                        (symbol (name ns-symb) (name symb)))))))
-                 sub-vars (cond->> (find-interesting-vars-references resolve-symb ns-symb form)
+                                       ;; el if it doesn't have an alias lets check defs
+                                       (let [ns-defs (:defs cljs-ns)
+                                             protocol-symbol? (get-in ns-defs [symb :meta :protocol-symbol])
+                                             type? (get-in ns-defs [symb :type])]
+                                         (when (and (contains? ns-defs symb)
+                                                    (not protocol-symbol?)
+                                                    (not type?))
+                                           (symbol (name ns-symb) (name symb)))))))
+                 sub-vars (cond->> (find-interesting-vars-references resolve-fn-symb ns-symb form)
                             (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
              (when (pos? (count sub-vars))
                (doseq [sub-var-symb sub-vars]
@@ -210,17 +215,17 @@
 
   Returns the set of instrumented fns."
 
-  [ns-prefixes {:keys [build-id] :as config}]
+  [namespaces-set {:keys [build-id] :as config}]
 
   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
         empty-env (requiring-resolve 'cljs.analyzer/empty-env)
         cenv (compiler-env build-id)
         aenv (empty-env)]
     (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
-                        (inst-ns/instrument-files-for-namespaces ns-prefixes
-                                                                 (merge config
-                                                                        {:prefixes? true
+                        (inst-ns/instrument-files-for-namespaces namespaces-set
+                                                                 (merge {:prefixes? true
                                                                          :env aenv}
+                                                                        config
                                                                         inst-ns/shadow-cljs-namespaces-config)))))
 
 (defn uninstrument-namespaces-shadow-cljs

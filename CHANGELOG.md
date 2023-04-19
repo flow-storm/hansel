@@ -4,9 +4,13 @@
 	
 ## New Features
     
-### Changes    
+### Changes
+
+	- instrument-namespaces-clj and instrument-namespaces-shadow-cljs accepts :prefixes? config
   
 ### Bugs fixed
+
+	- Fix deep instrumentation, only follow vars that represent functions
 
 ## 0.1.52 (12/04/2023)
 	
