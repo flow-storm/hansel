@@ -165,7 +165,8 @@
         ctx (cond-> ctx
               is-fn-def? (assoc :fn-ctx {:trace-name sym
                                          :kind :defn}))]
-    (list* sym (map (fn [arg] (instrument-form-recursively arg ctx)) rargs))))
+    (list* (utils/merge-meta sym (instrument-form-recursively (meta sym) ctx)) ;; instrument sym meta, is where :test are stored
+           (map (fn [arg] (instrument-form-recursively arg ctx)) rargs))))
 
 (defn- instrument-special-loop*-like
 
