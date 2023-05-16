@@ -5,6 +5,14 @@
 ## New Features
     
 ### Changes
+	
+### Bugs fixed
+
+## 0.1.56 (16-05-2023)
+	
+## New Features
+    
+### Changes
 
 	- Instrument def symbol meta, so (deftest... ) forms can be instrumented
 	
