@@ -16,7 +16,6 @@
    [hansel.utils :as utils]
    [hansel.instrument.utils :as inst-utils]))
 
-
 (declare instrument-outer-form)
 (declare instrument-coll)
 (declare instrument-special-form)
@@ -164,8 +163,10 @@
                         (= 'fn* (-> rargs first first)))
         ctx (cond-> ctx
               is-fn-def? (assoc :fn-ctx {:trace-name sym
-                                         :kind :defn}))]
-    (list* (utils/merge-meta sym (instrument-form-recursively (meta sym) ctx)) ;; instrument sym meta, is where :test are stored
+                                         :kind :defn}))
+        sym-meta-form (meta sym)
+        instrumented-def-sym-meta (instrument-form-recursively sym-meta-form ctx)]
+    (list* (utils/merge-meta sym instrumented-def-sym-meta) ;; instrument sym meta, is where :test are stored
            (map (fn [arg] (instrument-form-recursively arg ctx)) rargs))))
 
 (defn- instrument-special-loop*-like

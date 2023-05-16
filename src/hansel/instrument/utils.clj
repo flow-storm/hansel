@@ -226,13 +226,17 @@
                                            r)
                                          (catch ClassNotFoundException _ form))
                                     form))
-          expanded-with-meta (utils/merge-meta expanded
-                               md
-                               (when original-key
-                                 ;; We have to quote this, or it will get evaluated by
-                                 ;; Clojure (even though it's inside meta).
-                                 {original-key (list 'quote (strip-meta form))}))]
+          expanded-with-meta (utils/merge-meta
 
+                              expanded
+
+                              ;; also macroexpand meta, for forms like (deftest ...)
+                              (when md (macroexpand-all macroexpand-1-fn expand-symbol md original-key))
+
+                              (when original-key
+                                ;; We have to quote this, or it will get evaluated by
+                                ;; Clojure (even though it's inside meta).
+                                {original-key (list 'quote (strip-meta form))}))]
       expanded-with-meta)))
 
 (defn source-form
