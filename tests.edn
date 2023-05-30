@@ -8,4 +8,5 @@
           :source-paths ["src"]
           :test-paths ["test"]}]
  :kaocha/fail-fast? true
+ ;;:capture-output? false
  :plugins [:kaocha.plugin/profiling]}

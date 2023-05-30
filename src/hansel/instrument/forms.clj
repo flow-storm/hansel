@@ -23,6 +23,8 @@
 (declare instrument-cljs-extend-type-form-types)
 (declare macroexpand-all)
 
+(def clojure-script-basic-type '#{default nil object boolean number string array function})
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Instrumentation ;;
 ;;;;;;;;;;;;;;;;;;;;;
@@ -751,7 +753,9 @@
           (#{'clojure.core/extend-type 'cljs.core/extend-type} qualified-first-symb)
           (case compiler
             :clj (instrument-core-extend-form expanded-form ctx)
-            :cljs (instrument-cljs-extend-type-form-types expanded-form ctx))
+            :cljs (if (clojure-script-basic-type (second orig-outer-form))
+                    (instrument-cljs-extend-type-form-basic expanded-form ctx)
+                    (instrument-cljs-extend-type-form-types expanded-form ctx)))
 
           ;; defrecord
           (#{'clojure.core/defrecord 'cljs.core/defrecord} qualified-first-symb)

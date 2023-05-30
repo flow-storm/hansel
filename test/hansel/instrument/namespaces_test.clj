@@ -266,16 +266,15 @@
                                                     :build-id :node-repl
                                                     :verbose? true})]
 
-      (is (= '#{[hansel.instrument.tester/->ARecord 1]
-                [hansel.instrument.tester/add 1]
+      (is (= '#{[hansel.instrument.tester/add 1]
                 [hansel.instrument.tester/boo 1]
                 [hansel.instrument.tester/do-it 1]
                 [hansel.instrument.tester/factorial 1]
-                [hansel.instrument.tester/map->ARecord 1]
                 [hansel.instrument.tester/other-function 2]
                 [hansel.instrument.tester/sub 1]
                 [hansel.instrument.tester/multi-arity 1]
-                [hansel.instrument.tester/multi-arity 2]}
+                [hansel.instrument.tester/multi-arity 2]
+                [hansel.instrument.tester/-cljs$user$Adder$add$arity$1 1]}
              inst-fns)
           "Namespace instrumentation should collect instrumented fns")
 
@@ -290,10 +289,10 @@
                    read-string))
         "Instrumented function should return the same as the original one")
 
-    (is (= {:trace-bind 32
-            :trace-expr-exec 98
-            :trace-fn-call 19
-            :trace-fn-return 19
+    (is (= {:trace-bind 33
+            :trace-expr-exec 99
+            :trace-fn-call 20
+            :trace-fn-return 20
             :trace-form-init 10}
            (some-> (shadow/cljs-eval :node-repl "@traces-cnt2" {:ns 'cljs.user})
                    :results
