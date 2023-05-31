@@ -8,6 +8,14 @@
 	
 ### Bugs fixed
 
+## 0.1.60 (30-05-2023)
+	
+## New Features
+    
+### Changes
+	
+### Bugs fixed
+
 	- Fix extend-type for basic types extensions in ClojureScript
 	- Fix namespaces instrumentation in ClojureScript
 
