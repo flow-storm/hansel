@@ -115,7 +115,7 @@
 
   ([ns-symb form {:keys [compiler uninstrument? eval-in-ns-fn] :as config} retrying?]
 
-   (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fns :verbose? :env
+   (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fns :verbose? :env :form-file :form-line
                                         :trace-form-init :trace-fn-call :trace-fn-return :trace-expr-exec :trace-bind])]
 
      (try
@@ -185,33 +185,36 @@
                                         (assoc r v (meta v)))
                                       {})))
           re-eval-form-step (fn [inst-fns form]
-                              (try
+                              (let [config (assoc config
+                                                  :form-file (.getPath file-url)
+                                                  :form-line (-> form meta :line))]
+                                (try
 
-                                (if-not (interesting-form? form config)
+                                  (if-not (interesting-form? form config)
 
-                                  (do
-                                    (print ".")
-                                    inst-fns)
+                                    (do
+                                      (print ".")
+                                      inst-fns)
 
-                                  (do
-                                    (print "I")
-                                    (into inst-fns (re-eval-form ns-symb form config))))
+                                    (do
+                                      (print "I")
+                                      (into inst-fns (re-eval-form ns-symb form config))))
 
-                                (catch clojure.lang.ExceptionInfo ei
-                                  (let [e-data (ex-data ei)
-                                        ex-type (:type e-data)
-                                        ex-type-color (if (= :known-error ex-type)
-                                                        :yellow
-                                                        :red)]
-                                    (if verbose?
-                                      (do
-                                        (println)
-                                        (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
-                                        (println))
+                                  (catch clojure.lang.ExceptionInfo ei
+                                    (let [e-data (ex-data ei)
+                                          ex-type (:type e-data)
+                                          ex-type-color (if (= :known-error ex-type)
+                                                          :yellow
+                                                          :red)]
+                                      (if verbose?
+                                        (do
+                                          (println)
+                                          (print (utils/colored-string (str (ex-message ei) " " e-data) ex-type-color))
+                                          (println))
 
-                                      ;; else, quiet mode
-                                      (print (utils/colored-string "X" ex-type-color)))
-                                    inst-fns))))
+                                        ;; else, quiet mode
+                                        (print (utils/colored-string "X" ex-type-color)))
+                                      inst-fns)))))
           instrumented-fns (reduce re-eval-form-step #{} file-forms)]
 
       ;; for Clojure restore all var meta for the ns

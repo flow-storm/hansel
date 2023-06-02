@@ -5,9 +5,13 @@
 ## New Features
     
 ### Changes
+
+	- trace-form-init now provides :file and :line
 	
 ### Bugs fixed
 
+	- Another fix for extend-type for basic types extensions in ClojureScript
+	
 ## 0.1.60 (30-05-2023)
 	
 ## New Features

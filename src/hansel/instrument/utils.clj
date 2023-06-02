@@ -31,8 +31,8 @@
 
 (defn file-forms-fn-clj [ns-symb file-url _]
   (binding [*ns* (find-ns ns-symb)]
-    (->> (format "[%s\n]" (slurp file-url))
-        (read-string {:read-cond :allow}))))
+    (->> (LineNumberingPushbackReader. (StringReader. (format "[%s\n]" (slurp file-url))))
+         (read {:read-cond :allow}))))
 
 (defn file-forms-fn-cljs  [ns-symb file-url {:keys [build-id]}]
   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)

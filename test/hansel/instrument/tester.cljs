@@ -22,13 +22,13 @@
 (defprotocol Adder
   (add [x]))
 
+(defprotocol Suber
+  (sub [x]))
+
 (defrecord ARecord [n]
 
   Adder
   (add [_] (+ n 1000)))
-
-(defprotocol Suber
-  (sub [x]))
 
 (extend-protocol Adder
 
@@ -40,6 +40,11 @@
   Suber
   (sub [l] (- l 42)))
 
+(extend-type ARecord
+
+  Suber
+  (sub [r] (+ 42 (* 2 32))))
+
 (def other-function
   (fn [a b]
     (+ a b 10)))
@@ -47,9 +52,14 @@
 (defn boo [xs]
   (let [a 25
         yy (other-function 4 5)
-        b (+ a 4)
+        b (multi-arity a)
         m {:a 5 :b [1 2 3]}
         mm (assoc m :c 10)
+        j (loop [i 100
+                 sum 0]
+            (if (> i 0)
+              (recur (dec i) (+ sum i))
+              sum))
         c (+ a b 7)
         d (add (->ARecord 5))
         sum (->> xs
@@ -57,6 +67,5 @@
                  (reduce + ))
         after-add (add sum)
         after-sub (sub after-add)
-        w (multi-arity a)
-        final (+ c d)]
+        final (+ c d j after-add after-sub)]
     final))

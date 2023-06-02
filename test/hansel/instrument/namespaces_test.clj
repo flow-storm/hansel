@@ -167,7 +167,8 @@
                     trace-bind (fn [_] (swap! traces-counts update :trace-bind inc))
                     trace-expr-exec (fn [data] (swap! traces-counts update :trace-expr-exec inc) (:result data))]
 
-        (let [{:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-clj #{"hansel.instrument.tester"}
+        (let [result-before-instrumentation (tester/boo [1 "hello" 5])
+              {:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-clj #{"hansel.instrument.tester"}
                                                                                        `{:trace-form-init trace-form-init
                                                                                          :trace-fn-call trace-fn-call
                                                                                          :trace-fn-return trace-fn-return
@@ -191,7 +192,7 @@
                  affected-namespaces)
               "Namespace instrumentation should collect affected-namespaces")
 
-          (is (= 6208 (tester/boo [1 "hello" 5]))
+          (is (= result-before-instrumentation (tester/boo [1 "hello" 5]))
               "Instrumented code should return the same as the original code")
 
           (is (= @traces-counts
@@ -256,7 +257,11 @@
     (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt2 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
     (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt2 update :trace-bind inc))" {:ns 'cljs.user})
 
-    (let [{:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-shadow-cljs
+    (let [result-before-instrumentation (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
+                                                :results
+                                                first
+                                                read-string)
+          {:keys [inst-fns affected-namespaces]} (hansel/instrument-namespaces-shadow-cljs
                                                   #{"hansel.instrument.tester"}
                                                   '{:trace-form-init cljs.user/count-form-init
                                                     :trace-fn-call cljs.user/count-fn-call
@@ -274,34 +279,35 @@
                 [hansel.instrument.tester/sub 1]
                 [hansel.instrument.tester/multi-arity 1]
                 [hansel.instrument.tester/multi-arity 2]
-                [hansel.instrument.tester/-cljs$user$Adder$add$arity$1 1]}
+                [hansel.instrument.tester/-cljs$user$Adder$add$arity$1 1]
+                [hansel.instrument.tester/-cljs$user$Suber$sub$arity$1 1]}
              inst-fns)
           "Namespace instrumentation should collect instrumented fns")
 
       (is (= '#{hansel.instrument.tester}
              affected-namespaces)
-          "Namespace instrumentation should collect affected-namespaces"))
+          "Namespace instrumentation should collect affected-namespaces")
 
-    (is (= 1066
-           (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
-                   :results
-                   first
-                   read-string))
-        "Instrumented function should return the same as the original one")
+      (is (= result-before-instrumentation
+             (some-> (shadow/cljs-eval :node-repl "(tester/boo [1 \"hello\" 4])" {:ns 'cljs.user})
+                     :results
+                     first
+                     read-string))
+          "Instrumented function should return the same as the original one")
 
-    (is (= {:trace-bind 33
-            :trace-expr-exec 99
-            :trace-fn-call 20
-            :trace-fn-return 20
-            :trace-form-init 10}
-           (some-> (shadow/cljs-eval :node-repl "@traces-cnt2" {:ns 'cljs.user})
-                   :results
-                   first
-                   read-string))
-        "Traces count should be correct")
+      (is (= {:trace-bind 235
+              :trace-expr-exec 805
+              :trace-fn-call 20
+              :trace-fn-return 20
+              :trace-form-init 11}
+             (some-> (shadow/cljs-eval :node-repl "@traces-cnt2" {:ns 'cljs.user})
+                     :results
+                     first
+                     read-string))
+          "Traces count should be correct")
 
-    (hansel/uninstrument-namespaces-shadow-cljs
-     #{"hansel.instrument.tester"}
-     {:build-id :node-repl})
+      (hansel/uninstrument-namespaces-shadow-cljs
+       #{"hansel.instrument.tester"}
+       {:build-id :node-repl})
 
-    (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
+      (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user}))))

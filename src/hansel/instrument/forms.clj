@@ -522,17 +522,19 @@
   "Instrument extend-types over basic primitive types (number, string, ...)"
 
   [[_ & js*-list] ctx]
-  (let [inst-sets-forms (mapv (fn [[_ _ _ _ x :as js*-form]]
+  (let [inst-js*-forms (mapv (fn [[_ _ _ _ x :as js*-form]]
                                (let [fn-form? (and (seq? x) (= 'fn* (first x)))]
                                  (if fn-form?
                                    (let [[_ js-form fn-name type-str f-form] js*-form]
                                      (list 'js* js-form fn-name type-str (instrument-special-form
                                                                           f-form
-                                                                          (assoc ctx :fn-ctx {:trace-name (name fn-name)
-                                                                                              :kind :extend-type}))))
+                                                                          (assoc ctx
+                                                                                 :fn-ctx {:trace-name (name fn-name)
+                                                                                          :kind :extend-type}
+                                                                                 :extending-basic-type? true))))
                                    js*-form)))
                              js*-list)
-        inst-code `(do ~@inst-sets-forms)]
+        inst-code `(do ~@inst-js*-forms)]
     inst-code))
 
 (defn- instrument-cljs-extend-type-form-types
@@ -729,7 +731,7 @@
   "Like instrument-form-recursively but meant to be used around outer forms, not in recursions
   since it will do some checks that are only important in outer forms. "
 
-  [expanded-form {:keys [form-id form-ns trace-form-init orig-outer-form expand-symbol compiler] :as ctx}]
+  [expanded-form {:keys [form-id form-file form-line form-ns trace-form-init orig-outer-form expand-symbol compiler] :as ctx}]
   (let [qualified-first-symb (when (and (seq? orig-outer-form)
                                         (symbol? (first orig-outer-form)))
                                (expand-symbol (first orig-outer-form)))
@@ -787,7 +789,9 @@
                              [`(~trace-form-init ~(cond-> {:form-id form-id
                                                            :form `'~orig-outer-form
                                                            :ns form-ns
-                                                           :def-kind (:outer-form-kind ctx)}
+                                                           :def-kind (:outer-form-kind ctx)
+                                                           :file form-file
+                                                           :line form-line}
                                                     (= :defmethod (:outer-form-kind ctx)) (assoc :dispatch-val (-> ctx :fn-ctx :dispatch-val))))]))))
 
 (defn- instrument-outer-form
@@ -797,7 +801,7 @@
      ~@(-> preamble
            (into [(instrument-expression-form (conj forms 'do) [] (assoc ctx :outer-form? true))]))))
 
-(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind
+(defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind form-file form-line
                                                trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
   (let [form-id (hash form)
         compiler (inst-utils/compiler-from-env env)
@@ -815,24 +819,26 @@
                                                       (symbol v)
                                                       symb))])]
     (assert (or (nil? disable) (set? disable)) ":disable configuration should be a set")
-    {:environment      env
+    {:environment       env
      :tracing-disabled? tracing-disabled?
-     :compiler         compiler
-     :orig-outer-form  form
-     :form-id          form-id
-     :form-ns          form-ns
+     :compiler          compiler
+     :orig-outer-form   form
+     :form-id           form-id
+     :form-ns           form-ns
+     :form-file         form-file
+     :form-line         form-line
      :excluding-fns     (or excluding-fns #{})
-     :disable          (or disable #{}) ;; :expr :binding :anonymous-fn
+     :disable           (or disable #{}) ;; :expr :binding :anonymous-fn
 
      :trace-form-init trace-form-init
-     :trace-fn-call trace-fn-call
+     :trace-fn-call   trace-fn-call
      :trace-fn-return trace-fn-return
      :trace-expr-exec trace-expr-exec
-     :trace-bind trace-bind
+     :trace-bind      trace-bind
 
      :instrumented-fns (make-instrumented-fn-tracker)
      :macroexpand-1-fn macroexpand-1-fn
-     :expand-symbol expand-symbol}))
+     :expand-symbol    expand-symbol}))
 
 (defn- normalize-gensyms
 
