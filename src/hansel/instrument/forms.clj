@@ -177,9 +177,38 @@
 
   [[name & args :as form] ctx]
 
-  (let [bindings (->> (first args)
+  (let [bindings-vec (first args)
+        bindings (->> bindings-vec
                       (partition 2))
-        inst-bindings-vec (if (#{'loop* 'letfn*} name)
+        inst-bindings-vec (cond
+                            ;; don't add any binding for loop* since it will messup the recur call
+                            (= name 'loop*)
+                            bindings-vec
+
+                            ;; don't add any binding since there is nothing to see on the value
+                            ;; but instrument fn bodies
+                            (= name 'letfn*)
+                            (->> bindings
+                                 (mapcat (fn [[symb x]]
+                                           ;; like [a (+ 1 2)] will became
+                                           ;; [a (instrument-form-recursively (+ 1 2))]
+                                           ;; we have to remove the meta of the form here because
+                                           ;; the compiler complains if the letfn* fn* form contains any meta
+                                           [symb (with-meta (instrument-form-recursively x ctx) {})]))
+                                 vec)
+
+                            ;; it is a let*, so we add binding traces after each binding
+                            (= name 'let*)
+                            (->> bindings
+                                 (mapcat (fn [[symb x]]
+                                           ;; like [a (+ 1 2)] will became
+                                           ;; [a (instrument-form-recursively (+ 1 2))
+                                           ;;  _ (bind-tracer a ...)]
+                                           (-> [symb (instrument-form-recursively x ctx)]
+                                               (into ['_ (bind-tracer symb (-> form meta ::coor) ctx)]))))
+                                 vec))
+
+        #_(if (#{'loop* 'letfn*} name)
                             ;; don't mess with the bindings for loop* and letfn*
                             ;; letfn* doesn't make sense since all the bindings are fns and
                             ;; there is nothing to see there.
