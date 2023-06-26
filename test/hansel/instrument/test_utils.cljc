@@ -2,7 +2,7 @@
   (:require [hansel.instrument.runtime]
             [cljs.core.match :refer-macros [match]]
             #?@(:clj [[hansel.utils :as utils]
-                      [hansel.instrument.forms :as inst-forms]])))
+                      [hansel.instrument.forms2 :as inst-forms]])))
 
 ;; just for clj-kondo
 (comment match)

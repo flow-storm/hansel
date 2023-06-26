@@ -1,5 +1,5 @@
 (ns hansel.api
-  (:require [hansel.instrument.forms :as inst-forms]
+  (:require [hansel.instrument.forms2 :as inst-forms]
             [hansel.instrument.namespaces :as inst-ns]
             [hansel.instrument.utils :as inst-utils]
             [hansel.utils :as utils :refer [log log-error]]

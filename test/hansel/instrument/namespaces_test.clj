@@ -38,7 +38,7 @@
           ;; call the instrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-          (is (= 61 @trace-count) "Instrumented var should generate traces")
+          (is (= 60 @trace-count) "Instrumented var should generate traces")
 
           (is (= '#{ clojure.set/join} inst-set)
               "Instrumeting var with deep? false should only instrument required var"))
@@ -51,7 +51,7 @@
           ;; call the UNinstrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-          (is (= 61 @trace-count) "Uninstrumented var should NOT generate traces"))
+          (is (= 60 @trace-count) "Uninstrumented var should NOT generate traces"))
 
         ;; Instrument again this time deeply
         (let [inst-set (hansel/instrument-var-clj 'clojure.set/join (assoc inst-config
@@ -69,7 +69,7 @@
           ;; call the instrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-          (is (= 150 @trace-count) "Re instrumented var should generate traces"))
+          (is (= 148 @trace-count) "Re instrumented var should generate traces"))
 
         ;; finally leave the fn uninstrumented
         (let [un-inst-set (hansel/uninstrument-var-clj 'clojure.set/join {:deep? true})]

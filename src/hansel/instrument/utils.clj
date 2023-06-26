@@ -308,7 +308,7 @@
   (when (seq? form)
     (some-> form
             meta
-            :hansel.instrument.forms/original-form
+            :hansel.instrument.forms2/original-form
             rest
             ffirst
             name)))

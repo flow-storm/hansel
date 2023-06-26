@@ -1,6 +1,6 @@
 (ns hansel.instrument.namespaces
   (:require [hansel.instrument.utils :as inst-utils]
-            [hansel.instrument.forms :as inst-forms]
+            [hansel.instrument.forms2 :as inst-forms]
             [hansel.utils :as utils]
             [clojure.string :as str]
             [clojure.set :as set]
