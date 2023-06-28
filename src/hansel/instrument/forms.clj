@@ -712,13 +712,12 @@
   printouts."
 
   [form]
-  (utils/walk-indexed
+  (utils/walk-code-form
    (fn [_ f]
-     (if (instance? clojure.lang.IObj f)
-
+     (if (or (symbol? f)
+             (seq? f))
        (let [keys [::original-form ::coor]]
          (inst-utils/strip-meta f keys))
-
        f))
    form))
 

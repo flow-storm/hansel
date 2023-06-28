@@ -22,50 +22,58 @@
     #?(:clj (catch Exception _ obj)
        :cljs (catch js/Error _ obj))))
 
-(defn walk-indexed
+(defn- obj-coord [kind obj]
+  (str kind (hash obj)))
+
+(defn walk-code-form
+
   "Walk through form calling (f coor element).
   The value of coor is a vector of indices representing element's
-  address in the form. Unlike `clojure.walk/walk`, all metadata of
-  objects in the form is preserved."
-  ([f form] (walk-indexed [] f form))
-  ([coor f form]
-   (let [map-inner (fn [forms]
-                     (map-indexed #(walk-indexed (conj coor %1) f %2)
-                                  forms))         
-         walk-indexed-map (fn [map]
-                            (map-indexed (fn [i [k v]]
-                                           [(walk-indexed (conj coor (* 2 i)) f k)
-                                            (walk-indexed (conj coor (inc (* 2 i))) f v)])
-                                         map))
+  position in the form or a string for navigating into maps and set which
+  are unordered. In the case of map elements, the string will start with a K or a V
+  depending if it is a key or a value and will be followed by the hash of the key form for the entry.
+  For sets it will always start with K followed by the hash of the element form.
+  All metadata of objects in the form is preserved."
+  
+  ([f form] (walk-code-form [] f form))
+  ([coord f form]
+   (let [walk-sequential (fn [forms]
+                           (->> forms
+                                (map-indexed (fn [idx frm]
+                                               (walk-code-form (conj coord idx) f frm)))))
+         walk-set (fn [forms]
+                    (->> forms
+                         (map (fn [frm]                                
+                                (walk-code-form (conj coord (obj-coord "K" frm)) f frm)))
+                         (into #{})))
+         walk-map (fn [m]
+                    (reduce-kv (fn [r kform vform]
+                                 (assoc r
+                                        (walk-code-form (conj coord (obj-coord "K" kform)) f kform)
+                                        (walk-code-form (conj coord (obj-coord "V" kform)) f vform)))
+                               (empty m)
+                               m))
+         
          result (cond
                   
-                  ;; Clojure uses array-maps up to some map size (8 currently), which are sorted.
-                  ;; So for small maps we take advantage of that.
-                  ;; We will not be able to walk with coordinates over maps with more than 8
-                  ;; keys since they are unordered. We have the same issue
-                  ;; as with sets here.
-                  ;; If for is a record we also skip instrumentation for now
-                  (map? form) (if (and (<= (count form) 8)
-                                       (not (record? form)))
-                                (into {} (walk-indexed-map form))
-                                form)
-                  ;; Order of sets is unpredictable, unfortunately, so we don't know the coords
-                  (set? form)  form
-                  ;; Borrowed from clojure.walk/walk
-                  (list? form) (apply list (map-inner form))
-                  (map-entry? form) (vec (map-inner form))
-                  (seq? form)  (doall (map-inner form))
-                  (coll? form) (into (empty form) (map-inner form))
+                  (and (map? form) (not (record? form))) (walk-map form)                  
+                  (set? form)                            (walk-set form)
+                  (list? form)                           (apply list (walk-sequential form))
+                  (seq? form)                            (doall (walk-sequential form))
+                  (coll? form)                           (into (empty form) (walk-sequential form))                                    
                   :else form)]
-     (f coor (merge-meta result (meta form))))))
+     
+     (f coord (merge-meta result (meta form))))))
 
 (defn tag-form-recursively
   "Recursively add coordinates to all forms"
-  [form key]
-  ;; Don't use `postwalk` because it destroys previous metadata.
-  (walk-indexed (fn [coor frm]
-                  (merge-meta frm {key coor}))
-                form))
+  [form key]  
+  (walk-code-form (fn [coor frm]
+                    (if (or (symbol? frm)
+                            (seq? frm))
+                      (merge-meta frm {key coor})
+                      frm))
+                  form))
 
 #?(:clj
    (defn colored-string [s c]

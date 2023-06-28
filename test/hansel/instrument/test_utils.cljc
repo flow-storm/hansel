@@ -24,16 +24,17 @@
                               form))))
 
 #?(:clj
-   (defmacro def-instrumentation-test [tname tdesc & {:keys [form print-collected? run-form should-return tracing]}]
+   (defmacro def-instrumentation-test [tname tdesc & {:keys [form print-collected? run-form should-return tracing unsorted-tracing]}]
      (let [collected-traces-symb (gensym "collected-traces")
-           matches-tests (->> tracing
-                              (map-indexed (fn [i t]
-                                             `(let [coll-trace# (nth (deref ~collected-traces-symb) ~i)]
-                                                (clojure.test/is
-                                                 (~'match [coll-trace#]
-                                                        [~t] true
-                                                        :else false)
-                                                 (utils/format "Trace should match (let [t %s] (clojure.core.match/match [t] \n [%s] true :else false))" coll-trace# ~(str t)))))))]
+           matches-tests (when tracing
+                           (->> tracing
+                                (map-indexed (fn [i t]
+                                               `(let [coll-trace# (nth (deref ~collected-traces-symb) ~i)]
+                                                  (clojure.test/is
+                                                   (~'match [coll-trace#]
+                                                    [~t] true
+                                                    :else false)
+                                                   (utils/format "Trace should match (let [t %s] (clojure.core.match/match [t] \n [%s] true :else false))" coll-trace# ~(str t))))))))]
        `(do        
           (clojure.test/deftest ~tname
             (clojure.test/testing ~tdesc
@@ -53,12 +54,14 @@
 
                     (clojure.test/is (= form-return# ~should-return) "Instrumentation should not break the form")
 
-                    (clojure.test/is (= ~(count tracing)
+                    (clojure.test/is (= ~(if tracing (count tracing) (count unsorted-tracing))
                                         (count (deref ~collected-traces-symb)))
                                      "Collected traces should match with provided traces")
 
-                    ~@matches-tests
-                    )))))))))
+                    (when-let [ut# ~unsorted-tracing]
+                      (clojure.test/is (= (into #{} (deref ~collected-traces-symb)) ut#) "Unsorted tracing should match"))
+                    
+                    ~@matches-tests)))))))))
 
 #?(:clj (defn read-eq-guard [form]
           `(~'_ :guard (fn [x#] (= x# ~form)))))
