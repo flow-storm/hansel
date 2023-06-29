@@ -5,7 +5,19 @@
 ## New Features
     
 ### Changes
+	        
+### Bugs fixed
+
+## 0.1.65 (29-06-2023)
 	
+## New Features
+
+    - Support for instrumenting litteral maps and sets of any size
+    
+### Changes
+	
+    - BREAKING! Coordinates format changed, check the docs
+    
 ### Bugs fixed
 
 ## 0.1.63 (06-06-2023)

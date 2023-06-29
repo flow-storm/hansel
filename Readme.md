@@ -70,32 +70,6 @@ It is ment as a platform to build tooling that depends on code instrumentation, 
 ;; [fn-return] data: {:return 5, :form-id -1653360108}
 ```
 
-### Conditional tracing
-
-```clojure
-(hansel/instrument {:trace-form-init dev/print-form-init
-                    :trace-fn-call dev/print-fn-call
-                    :trace-fn-return dev/print-fn-return
-                    :trace-expr-exec dev/print-expr-exec
-                    :trace-bind dev/print-bind}
-                   (defn factorial [n]
-                     (loop [i n
-                            r 1]
-                       (if (zero? i)
-                         r
-                         (recur ^{:trace/when (= i 2)} (dec i)
-                                                       (* r i))))))
-
-;; start with tracing disabled. It will be enabled/disabled depending on
-;; the :trace/when meta
-(hansel/with-ctx {:tracing-disabled? true}
-  (factorial 5))
-
-;; Your tracing handlers are going to be called every time and hansel.instrument.runtime/*runtime-ctx*
-;; will contain :tracing-disabled? on each call
-
-```
-
 ### Namespaces instrumentation
 
 ```clojure
@@ -183,6 +157,26 @@ So the coordinate `[3 2]` in the form :
 ```
 
 refers to the `b` symbol in `(+ a b)` which is under coordinate `[3]`.
+
+The coords are a vector of positional indexes from the root but for maps instead of an index it will be for :
+
+    map key : a string K followed by the hash of the key form
+    map value: a string V followed by the hash of the key form for the val
+
+For sets it will also be a string K followed by the hash of the set
+element form.
+
+As an example :
+
+(defn foo [a b]
+  (assoc {1 10
+          (+ 42 43) 100}
+         :x #{(+ 1 2) (+ 3 4) (+ 4 5) (+ 1 1 (* 2 2))}))
+
+some examples coordinates :
+
+    [3 1 "K-240379483"]   => (+ 42 43)
+    [3 2 "K1305480196" 3] => (* 2 2)
 
 ## How do I relate fn-return to its fn-call?
 
