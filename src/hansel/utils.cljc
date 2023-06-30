@@ -1,7 +1,9 @@
-(ns hansel.utils
+(ns hansel.utils  
+  #?(:clj (:require [clojure.string :as str]))
   #?(:clj (:refer-clojure :exclude [format]))
   #?(:cljs (:require [goog.string :as gstr]
-                     [goog.string.format])))
+                     [goog.string.format]
+                     [clojure.string :as str])))
 
 (defn format [& args]
   #?(:clj (apply clojure.core/format args)
@@ -22,8 +24,34 @@
     #?(:clj (catch Exception _ obj)
        :cljs (catch js/Error _ obj))))
 
+
+(defn clojure-form-source-hash
+
+  "Hash a clojure form string into a 32 bit num.
+  Meant to be called with printed representations of a form,
+  or a form source read from a file."
+
+  [s]
+  (let [M 4294967291
+        clean-s (-> s
+                    (.replaceAll "#[/.a-zA-Z0-9_-]+" "")  ;; remove tags
+                    (.replaceAll "\\^:[a-zA-Z0-9_-]+" "") ;; remove meta keys
+                    (.replaceAll "\\^\\{.+?\\}" "")       ;; remove meta maps
+                    (.replaceAll ";.+\n" "")              ;; remove comments
+                    (.replaceAll "[ \t\n]+" ""))        ;; remove non visible
+        ] 
+    (loop [sum 0
+           mul 1
+           i 0
+           [c & srest] clean-s]
+      (if (nil? c)
+        (mod sum M)
+        (let [mul' (if (= 0 (mod i 4)) 1 (* mul 256))
+              sum' (+ sum (* (int c) mul'))]
+          (recur sum' mul' (inc i) srest))))))
+
 (defn- obj-coord [kind obj]
-  (str kind (hash obj)))
+  (str kind (clojure-form-source-hash (pr-str obj))))
 
 (defn walk-code-form
 

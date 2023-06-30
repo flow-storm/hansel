@@ -126,24 +126,24 @@
                  :x #{(+ 1 2) (+ 3 4) (+ 5 6) (+ 1 1 (* 2 2))}))
   :run-form (big-maps-and-sets-fn)
   :should-return {7 14, 1 2, 4 8, 6 12, 3 6, 2 4, 9 18, 5 10, :x #{7 6 3 11}, 8 16, 84 84}
-  :print-collected? true
+  :print-collected? true  
   :unsorted-tracing #{[:trace-form-init {:form-id 1936427945, :form '(defn big-maps-and-sets-fn [] (assoc {7 (+ 7 7), 1 (+ 1 1), 4 (+ 4 4), (+ 42 42) 84, 6 (+ 6 6), 3 (+ 3 3), 2 (+ 2 2), 9 (+ 9 9), 5 (+ 5 5), 8 (+ 8 8)} :x #{(+ 1 2) (+ 1 1 (* 2 2)) (+ 5 6) (+ 3 4)})), :ns "hansel.instrument.forms-test", :def-kind :defn, :file nil, :line nil}]
                       [:trace-fn-call {:form-id 1936427945, :ns "hansel.instrument.forms-test", :fn-name "big-maps-and-sets-fn", :unnamed-fn? false, :inner-fn? false, :fn-args []}]
-                      [:trace-expr-exec {:coor [3 1 "V-137604029"], :result 14, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V1392991556"], :result 2, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V-803074778"], :result 8, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V1795257809"], :result 12, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V-1556392013"], :result 6, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V-971005196"], :result 4, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V1887164919"], :result 18, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V1740791543"], :result 10, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "K468782059"], :result 84, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 1 "V-153401025"], :result 16, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 3 "K1305480196" 3], :result 4, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 3 "K1305480196"], :result 6, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 3 "K2040295583"], :result 7, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 3 "K806975281"], :result 11, :form-id 1936427945}]
-                      [:trace-expr-exec {:coor [3 3 "K1619294659"], :result 3, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V55"], :result 14, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V49"], :result 2, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V52"], :result 8, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V54"], :result 12, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V51"], :result 6, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V50"], :result 4, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V57"], :result 18, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V53"], :result 10, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "V56"], :result 16, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 1 "K844979548"], :result 84, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 3 "K875768657"], :result 7, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 3 "K1667464825" 3], :result 4, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 3 "K1667464825"], :result 6, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 3 "K842083153"], :result 3, :form-id 1936427945}]
+                      [:trace-expr-exec {:coor [3 3 "K909454161"], :result 11, :form-id 1936427945}]
                       [:trace-expr-exec {:coor [3], :result {7 14, 1 2, 4 8, 6 12, 3 6, 2 4, 9 18, 5 10, :x #{7 6 3 11}, 8 16, 84 84}, :form-id 1936427945}]
                       [:trace-fn-return {:return {7 14, 1 2, 4 8, 6 12, 3 6, 2 4, 9 18, 5 10, :x #{7 6 3 11}, 8 16, 84 84}, :form-id 1936427945}]})
 
