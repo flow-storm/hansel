@@ -24,7 +24,6 @@
     #?(:clj (catch Exception _ obj)
        :cljs (catch js/Error _ obj))))
 
-
 (defn clojure-form-source-hash
 
   "Hash a clojure form string into a 32 bit num.
@@ -34,11 +33,11 @@
   [s]
   (let [M 4294967291
         clean-s (-> s
-                    (.replaceAll "#[/.a-zA-Z0-9_-]+" "")  ;; remove tags
-                    (.replaceAll "\\^:[a-zA-Z0-9_-]+" "") ;; remove meta keys
-                    (.replaceAll "\\^\\{.+?\\}" "")       ;; remove meta maps
-                    (.replaceAll ";.+\n" "")              ;; remove comments
-                    (.replaceAll "[ \t\n]+" ""))        ;; remove non visible
+                    (str/replace #"#[/.a-zA-Z0-9_-]+" "") ;; remove tags
+                    (str/replace #"\^:[a-zA-Z0-9_-]+" "") ;; remove meta keys
+                    (str/replace #"\^\{.+?\}" "")         ;; remove meta maps
+                    (str/replace #";.+\n" "")             ;; remove comments
+                    (str/replace #"[ \t\n]+" ""))         ;; remove non visible
         ] 
     (loop [sum 0
            mul 1
