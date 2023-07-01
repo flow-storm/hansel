@@ -5,6 +5,14 @@
 ## New Features
     
 ### Changes
+    
+### Bugs fixed
+
+## 0.1.67 (30-06-2023)
+	
+## New Features
+    
+### Changes
 
     - Improving coordinates forms hash function
 
