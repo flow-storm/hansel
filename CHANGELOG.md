@@ -8,6 +8,14 @@
     
 ### Bugs fixed
 
+## 0.1.71 (06-07-2023)
+	
+## New Features
+    
+### Changes
+    
+### Bugs fixed
+
     - Fix the ClojureScript case were a ns refers to itself via :refer-macro
     
 ## 0.1.69 (30-06-2023)
