@@ -263,7 +263,10 @@
                                           (into #{})
                                           (map (fn [file-url]
                                                  (let [ns-decl-form (read-file-ns-decl file-url)
-                                                       deps (tools-ns-parse/deps-from-ns-decl ns-decl-form)]
+                                                       ;; this disj is because deps-from-ns-decl on namespaces like
+                                                       ;; (ns dev-tester (:require-macros [dev-tester])) will return itself
+                                                       ;; as a dependency, which will then endup in a dependecy cycle
+                                                       deps (disj (tools-ns-parse/deps-from-ns-decl ns-decl-form) ns-symb)]
                                                    {:ns ns-symb
                                                     :file file-url
                                                     :deps (filter ns-pred deps)}))))))
