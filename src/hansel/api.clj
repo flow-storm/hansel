@@ -39,19 +39,27 @@
   "Given a Clojure `var-symb` instrument it using `hansel.api/instrument-form`.
   Config options are the same as `hansel.api/instrument-form` plus
   - :deep? When true recursively instrument all referenced vars (default to false)
-  - :skip-namespaces A set of namespaces to skip when instrumenting deeply."
+  - :skip-namespaces A set of namespaces to skip when instrumenting deeply.
+  - :file and :line. When provided the source for the var fn will be read from them instead of the var meta.
+  Returns a collection of {:keys [var-symb file line]} for each insrumented var."
 
   ([var-symb config]
    (let [*instrumented-set (atom #{})]
      (instrument-var-clj var-symb config *instrumented-set)
-     @*instrumented-set))
+     (mapv (fn [vs]
+             {:var-symb vs
+              :file (-> vs meta :file)
+              :line (-> vs meta :line)})
+           @*instrumented-set)))
 
-  ([var-symb {:keys [deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
+  ([var-symb {:keys [deep? uninstrument? skip-namespaces file line] :as config} *instrumented-set]
    (let [ns-symb (symbol (namespace var-symb))
          form-ns (find-ns ns-symb)]
      (log (format "Clojure re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (binding [*ns* form-ns]
-       (let [form (inst-utils/source-form var-symb)]
+       (let [{:keys [form file line]} (if (and file line)
+                                        (inst-utils/source-form file line (namespace var-symb))
+                                        (inst-utils/source-form var-symb))]
          (if form
 
            (let [v (find-var var-symb)
@@ -70,15 +78,16 @@
              ;; restore the var meta
              (alter-meta! v (constantly vmeta))
 
-             (swap! *instrumented-set conj var-symb)
+             (swap! *instrumented-set conj (with-meta var-symb {:file file
+                                                                :line line}))
 
              (when deep?
                (let [skip-namespaces (into #{"clojure.core"} skip-namespaces) ;; always skip clojure.core on deep instrumentation
                      resolve-fn-symb (fn resolve-fn-symb [ns-symb symb]
                                        (binding [*ns* (find-ns ns-symb)]
-                                      (when-let [v (resolve symb)]
-                                        (when (and (var? v) (fn? (deref v)))
-                                          (symbol v)))))
+                                         (when-let [v (resolve symb)]
+                                           (when (and (var? v) (fn? (deref v)))
+                                             (symbol v)))))
                      sub-vars (cond->> (find-interesting-vars-references resolve-fn-symb ns-symb form)
                                 (set? skip-namespaces) (remove (fn [vsymb] (skip-namespaces (namespace vsymb)))))]
                  (when (pos? (count sub-vars))
@@ -143,13 +152,18 @@
   ([var-symb config]
    (let [*instrumented-set (atom #{})]
      (instrument-var-shadow-cljs var-symb config *instrumented-set)
-     @*instrumented-set))
+     (mapv (fn [vs]
+             {:var-symb vs
+              :file (-> vs meta :file)
+              :line (-> vs meta :line)})
+           @*instrumented-set)))
 
-  ([var-symb {:keys [build-id deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
+  ([var-symb {:keys [build-id deep? uninstrument? skip-namespaces file line] :as config} *instrumented-set]
 
    (let [ns-symb (symbol (namespace var-symb))
-         form (some->> (inst-utils/source-fn-cljs var-symb build-id)
-                       (read-string {:read-cond :allow}))
+         {:keys [form file line]} (if (and file line)
+                                    (inst-utils/source-fn-cljs file line (namespace var-symb) build-id)
+                                    (inst-utils/source-fn-cljs var-symb build-id))
          compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
          empty-env (requiring-resolve 'cljs.analyzer/empty-env)
          cenv (compiler-env build-id)
@@ -166,7 +180,9 @@
                                                             config
                                                             {:env aenv})))
            (catch Exception e (log-error (format "Error re-evaluating %s" var-symb) e)))
-         (swap! *instrumented-set conj var-symb)
+
+         (swap! *instrumented-set conj (with-meta var-symb {:file file
+                                                            :line line}))
 
          (when deep?
            (let [skip-namespaces (into #{"cljs.core"} skip-namespaces) ;; always skip cljs.core on deep instrumentation

@@ -99,12 +99,13 @@ You can instrument any var by using `hansel/instrument-var-clj` like this :
      :deep? true}) ;; deep? is nil by default
 
 ;; it will return all the instrumented vars
-;; => #{clojure.set/bubble-max-key
-        clojure.set/index
-        clojure.set/intersection
-        clojure.set/join
-        clojure.set/map-invert
-        clojure.set/rename-keys}
+;; => 
+[{:var-symb clojure.set/intersection, :file "clojure/set.clj", :line 33}
+ {:var-symb clojure.set/index, :file "clojure/set.clj", :line 95}
+ {:var-symb clojure.set/bubble-max-key, :file "clojure/set.clj", :line 13}
+ {:var-symb clojure.set/rename-keys, :file "clojure/set.clj", :line 78}
+ {:var-symb clojure.set/map-invert, :file "clojure/set.clj", :line 106}
+ {:var-symb clojure.set/join, :file "clojure/set.clj", :line 115}]
 ```
 
 ## ClojureScript

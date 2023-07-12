@@ -26,61 +26,55 @@
                       :trace-fn-return trace-fn-return
                       :trace-expr-exec trace-expr-exec
                       :trace-bind trace-bind}]
-    (testing "Clojure var instrumentation/uninstrumentation"
-      (with-redefs [trace-form-init (fn [_] (swap! trace-count inc))
-                    trace-fn-call (fn [_] (swap! trace-count inc) )
-                    trace-fn-return (fn [data] (swap! trace-count inc) (:return data))
-                    trace-bind (fn [_] (swap! trace-count inc))
-                    trace-expr-exec (fn [data] (swap! trace-count inc) (:result data))]
+    (with-redefs [trace-form-init (fn [_] (swap! trace-count inc))
+                  trace-fn-call (fn [_] (swap! trace-count inc) )
+                  trace-fn-return (fn [data] (swap! trace-count inc) (:return data))
+                  trace-bind (fn [_] (swap! trace-count inc))
+                  trace-expr-exec (fn [data] (swap! trace-count inc) (:result data))]
 
-        ;; instrument first time
-        (let [inst-set (hansel/instrument-var-clj 'clojure.set/join inst-config)]
+      (testing "Instrument clojure vars by symbol "
+        (let [inst-set (into #{} (hansel/instrument-var-clj 'clojure.set/join inst-config))]
           ;; call the instrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
           (is (= 61 @trace-count) "Instrumented var should generate traces")
 
-          (is (= '#{ clojure.set/join} inst-set)
-              "Instrumeting var with deep? false should only instrument required var"))
+          (is (= '#{{:file "clojure/set.clj", :line 115, :var-symb clojure.set/join}} inst-set)
+              "Instrumeting var with deep? false should only instrument required var")))
 
-        ;; UNinstrument
-        (let [un-inst-set (hansel/uninstrument-var-clj 'clojure.set/join)]
-          (is (= '#{ clojure.set/join} un-inst-set)
+      (testing "Uninstrument clojure vars by symbol"
+        (let [un-inst-set (into #{} (hansel/uninstrument-var-clj 'clojure.set/join))]
+          (is (= '#{{:file "clojure/set.clj", :line 115, :var-symb clojure.set/join}} un-inst-set)
               "Uninstrumeting var with deep? false should only instrument required var")
 
           ;; call the UNinstrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-          (is (= 61 @trace-count) "Uninstrumented var should NOT generate traces"))
+          (is (= 61 @trace-count) "Uninstrumented var should NOT generate traces")))
 
-        ;; Instrument again this time deeply
-        (let [inst-set (hansel/instrument-var-clj 'clojure.set/join (assoc inst-config
-                                                                           :deep? true))]
+      (testing "Instrument clojure vars deeply"
+        (let [vars-expected-set '#{{:file "clojure/set.clj", :line 13, :var-symb clojure.set/bubble-max-key}
+                                   {:file "clojure/set.clj", :line 33, :var-symb clojure.set/intersection}
+                                   {:file "clojure/set.clj", :line 78, :var-symb clojure.set/rename-keys}
+                                   {:file "clojure/set.clj", :line 95, :var-symb clojure.set/index}
+                                   {:file "clojure/set.clj", :line 106, :var-symb clojure.set/map-invert}
+                                   {:file "clojure/set.clj", :line 115, :var-symb clojure.set/join}}
+              inst-set (->> (hansel/instrument-var-clj 'clojure.set/join (assoc inst-config
+                                                                                :deep? true))
+                            (into #{}))]
 
-          (is (= '#{clojure.set/bubble-max-key
-                    clojure.set/index
-                    clojure.set/intersection
-                    clojure.set/join
-                    clojure.set/map-invert
-                    clojure.set/rename-keys}
-                 inst-set)
+          (is (= vars-expected-set inst-set)
               "Instrumeting var with deep? true should instrument all sub-vars")
 
           ;; call the instrumented function
           (set/join #{{:id 1 :name "john"}} #{{:id 1 :age 39}})
 
-          (is (= 150 @trace-count) "Re instrumented var should generate traces"))
+          (is (= 150 @trace-count) "Re instrumented var should generate traces")
 
-        ;; finally leave the fn uninstrumented
-        (let [un-inst-set (hansel/uninstrument-var-clj 'clojure.set/join {:deep? true})]
-          (is (= '#{clojure.set/bubble-max-key
-                    clojure.set/index
-                    clojure.set/intersection
-                    clojure.set/join
-                    clojure.set/map-invert
-                    clojure.set/rename-keys}
-                 un-inst-set)
-              "Uninstrumeting var with deep? true should uninstrument all sub-vars"))))))
+          ;; finally leave the fn uninstrumented
+          (let [un-inst-set (into #{} (hansel/uninstrument-var-clj 'clojure.set/join {:deep? true}))]
+            (is (= vars-expected-set un-inst-set)
+                "Uninstrumeting var with deep? true should uninstrument all sub-vars")))))))
 
 (deftest instrument-var-shadow-cljs
 
@@ -103,15 +97,17 @@
   (shadow/cljs-eval :node-repl "(defn count-expr-exec [{:keys [result] :as data}] (swap! traces-cnt1 update :trace-expr-exec inc) result)" {:ns 'cljs.user})
   (shadow/cljs-eval :node-repl "(defn count-bind [_] (swap! traces-cnt1 update :trace-bind inc))" {:ns 'cljs.user})
 
-  (let [inst-set (hansel/instrument-var-shadow-cljs
-                  'hansel.instrument.tester/factorial
-                  '{:trace-form-init cljs.user/count-form-init
-                    :trace-fn-call cljs.user/count-fn-call
-                    :trace-fn-return cljs.user/count-fn-return
-                    :trace-expr-exec cljs.user/count-expr-exec
-                    :trace-bind cljs.user/count-bind
-                    :build-id :node-repl})]
-    (is (= inst-set #{'hansel.instrument.tester/factorial}) "Shallow instrumentation should only instrument requested var"))
+  (let [inst-set (->> (hansel/instrument-var-shadow-cljs
+                       'hansel.instrument.tester/factorial
+                       '{:trace-form-init cljs.user/count-form-init
+                         :trace-fn-call cljs.user/count-fn-call
+                         :trace-fn-return cljs.user/count-fn-return
+                         :trace-expr-exec cljs.user/count-expr-exec
+                         :trace-bind cljs.user/count-bind
+                         :build-id :node-repl})
+                      (into #{}))
+        expected-set '#{{:file "hansel/instrument/tester.cljs", :line 3, :var-symb hansel.instrument.tester/factorial}}]
+    (is (= expected-set inst-set) "Shallow instrumentation should only instrument requested var"))
 
   (testing "ClojureScript var instrumentation/uninstrumentation"
 
@@ -133,23 +129,24 @@
                    read-string))
         "Traces count should be correct")
 
-    (let [inst-set (hansel/instrument-var-shadow-cljs
-                      'hansel.instrument.tester/boo
-                      '{:trace-form-init cljs.user/count-form-init
-                        :trace-fn-call cljs.user/count-fn-call
-                        :trace-fn-return cljs.user/count-fn-return
-                        :trace-expr-exec cljs.user/count-expr-exec
-                        :trace-bind cljs.user/count-bind
-                        :build-id :node-repl
-                        :deep? true})]
-      (is (= '#{hansel.instrument.tester/boo
-                hansel.instrument.tester/->ARecord
-                hansel.instrument.tester/add
-                hansel.instrument.tester/do-it
-                hansel.instrument.tester/multi-arity
-                hansel.instrument.tester/other-function
-                hansel.instrument.tester/sub}
-             inst-set)
+    (let [expected-set '#{{:file "hansel/instrument/tester.cljs", :line 22, :var-symb hansel.instrument.tester/add}
+                          {:file "hansel/instrument/tester.cljs", :line 25, :var-symb hansel.instrument.tester/sub}
+                          {:file "hansel/instrument/tester.cljs", :line 12, :var-symb hansel.instrument.tester/do-it}
+                          {:file "hansel/instrument/tester.cljs", :line 48, :var-symb hansel.instrument.tester/other-function}
+                          {:file "hansel/instrument/tester.cljs", :line 52, :var-symb hansel.instrument.tester/boo}
+                          {:file "hansel/instrument/tester.cljs", :line 8, :var-symb hansel.instrument.tester/multi-arity}
+                          {:file "hansel/instrument/tester.cljs", :line 28, :var-symb hansel.instrument.tester/->ARecord}}
+          inst-set (->> (hansel/instrument-var-shadow-cljs
+                         'hansel.instrument.tester/boo
+                         '{:trace-form-init cljs.user/count-form-init
+                           :trace-fn-call cljs.user/count-fn-call
+                           :trace-fn-return cljs.user/count-fn-return
+                           :trace-expr-exec cljs.user/count-expr-exec
+                           :trace-bind cljs.user/count-bind
+                           :build-id :node-repl
+                           :deep? true})
+                        (into #{}))]
+      (is (= expected-set inst-set)
           "Deep instrumentation should instrument all"))
 
     (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))

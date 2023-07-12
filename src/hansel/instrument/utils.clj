@@ -3,7 +3,7 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [hansel.utils :as utils])
-  (:import [java.io StringReader InputStreamReader]
+  (:import [java.io StringReader InputStreamReader PushbackReader]
            [clojure.lang LineNumberingPushbackReader]
            [clojure.lang RT]))
 
@@ -81,16 +81,52 @@
     (when file
       [file])))
 
-(defn source-fn-cljs [var-symb build-id]
-  (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
-        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
-        source-fn (requiring-resolve 'cljs.repl/source-fn)
-        cenv (compiler-env build-id)
-        aenv (assoc-in (empty-env) [:ns :name] 'cljs.user)]
+(defn source-fn-cljs
+  ([var-symb build-id]
+   (let [ns-symb (symbol (namespace var-symb))
+         ana-api-resolve (requiring-resolve 'cljs.analyzer.api/resolve)
+         empty-env (requiring-resolve 'cljs.analyzer/empty-env)
+         aenv (assoc-in (empty-env) [:ns :name] ns-symb)
+         compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+         cenv (compiler-env build-id)]
 
-    (utils/lazy-binding [cljs.analyzer/*cljs-ns* 'cljs.user
-                         cljs.env/*compiler* (atom cenv)]
-                        (source-fn aenv var-symb))))
+     (when-let [v (utils/lazy-binding
+                   [cljs.analyzer/*cljs-ns* ns-symb
+                    cljs.env/*compiler* (atom cenv)]
+                   (ana-api-resolve aenv var-symb))]
+       (source-fn-cljs (:file v)
+                       (:line v)
+                       (:ns v)
+                       build-id))))
+
+  ([file-path var-def-line nsname build-id]
+   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
+         cenv (compiler-env build-id)
+         ns-symb (symbol nsname)
+         ana-load-data-readers (requiring-resolve 'cljs.analyzer/load-data-readers)
+         data-readers (merge @(requiring-resolve 'cljs.tagged-literals/*cljs-data-readers*)
+                             (ana-load-data-readers))
+         reader-read (requiring-resolve 'cljs.vendor.clojure.tools.reader/read)
+         readers-source-logging-push-back-reader (requiring-resolve 'cljs.vendor.clojure.tools.reader.reader-types/source-logging-push-back-reader)
+         readers-read-line (requiring-resolve 'cljs.vendor.clojure.tools.reader.reader-types/read-line)]
+
+     #_:clj-kondo/ignore
+     (utils/lazy-binding [cljs.analyzer/*cljs-ns* ns-symb
+                          cljs.env/*compiler* (atom cenv)
+                          cljs.vendor.clojure.tools.reader/*alias-map*    identity
+                          cljs.vendor.clojure.tools.reader/*data-readers* data-readers]
+
+                         (let [f (io/file file-path)
+                               f (if (.exists f)
+                                   f
+                                   (io/resource file-path))]
+                           (when f
+                             (with-open [pbr (PushbackReader. (io/reader f))]
+                               (let [rdr (readers-source-logging-push-back-reader pbr)]
+                                 (dotimes [_ (dec var-def-line)] (readers-read-line rdr))
+                                 {:form (reader-read {:read-cond :allow :features #{:cljs}} rdr)
+                                  :file file-path
+                                  :line var-def-line}))))))))
 
 ;; TODO: write a macro that expand to all this compiler and analysis env wrap setup
 (defn cljs-get-all-ns [build-id]
@@ -240,24 +276,30 @@
       expanded-with-meta)))
 
 (defn source-form
-  [vsymb]
-  (try
-    (when-let [v (resolve vsymb)]
-      (when-let [filepath (:file (meta v))]
-        (let [strm (or (.getResourceAsStream (RT/baseLoader) filepath)
-                       (io/input-stream filepath))
-              var-ns (.-ns v)
-              var-def-line (:line (meta v))]
-          (when strm
-            (with-open [rdr (LineNumberingPushbackReader. (InputStreamReader. strm))]
-              (loop [prev-line (.getLineNumber rdr)]
-                (let [form (binding [*ns* var-ns]
-                             (read rdr))
-                      new-line (.getLineNumber rdr)]
-                  (if (<= prev-line var-def-line new-line)
-                    form
-                    (recur new-line)))))))))
-    (catch Exception _ nil)))
+  "Returns a map with :form, :file, and :line"
+  ([vsymb]
+   (when-let [v (resolve vsymb)]
+     (when-let [file-path (:file (meta v))]
+       (source-form file-path
+                    (:line (meta v))
+                    (ns-name (.-ns v))))))
+  ([file-path var-def-line nsname]
+   (try
+     (let [strm (or (.getResourceAsStream (RT/baseLoader) file-path)
+                    (io/input-stream file-path))
+           var-ns (find-ns (symbol nsname))]
+       (when strm
+         (with-open [rdr (LineNumberingPushbackReader. (InputStreamReader. strm))]
+           (loop [prev-line (.getLineNumber rdr)]
+             (let [form (binding [*ns* var-ns]
+                          (read rdr))
+                   new-line (.getLineNumber rdr)]
+               (if (<= prev-line var-def-line new-line)
+                 {:form form
+                  :file file-path
+                  :line var-def-line}
+                 (recur new-line)))))))
+     (catch Exception _ nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities to recognize forms in their macroexpanded forms ;;

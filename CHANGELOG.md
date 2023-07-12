@@ -4,7 +4,11 @@
 	
 ## New Features
     
+    - [un]instrument-var-[clj|shadow-cljs] config now accept extra :file, :line that will be used to look for the source when provided
+    
 ### Changes
+
+    - BREAKING instrument-var-[clj|shadow-cljs] now return a collection of {:keys [var-symb file line]}
     
 ### Bugs fixed
 
