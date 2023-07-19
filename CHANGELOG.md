@@ -6,8 +6,11 @@
     
 ### Changes
     
+    - Skip specter path instrumentation
+    
 ### Bugs fixed
 
+    - Fix specter path instrumentation error
     - Fix a corner case issue on expanded-cljs-multi-arity-defn?
 
 ## 0.1.71 (06-07-2023)

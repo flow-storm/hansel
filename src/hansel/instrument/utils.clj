@@ -130,6 +130,15 @@
        (with-meta form nil))
      form)))
 
+(defn deep-strip-meta [form ks]
+  (utils/walk-code-form
+   (fn [_ f]
+     (if (or (symbol? f)
+             (seq? f))
+       (strip-meta f ks)
+       f))
+   form))
+
 (defn listy?
   "Returns true if x is any kind of list except a vector."
   [x]
@@ -205,8 +214,10 @@
 
     ;; don't macroexpand com.rpl.specter/path since for weird macroexpansion and var resolving reasons
     ;; it fails if we try to evaluate the macroexpansion of path
+    ;; Since we are skipping macroexpansion we also remove all coor tags so nothing tries to get
+    ;; instrumented under this, which can't, since we can only instrument macroexpanded code
     (specter-path-form? expand-symbol form)
-    form
+    (deep-strip-meta form [:hansel.instrument.forms/coor])
 
     (core-async-go-form? expand-symbol form)
     (macroexpand-core-async-go macroexpand-1-fn expand-symbol form original-key)

@@ -706,21 +706,6 @@
       (wrap-trace-when inst-form enable-clause)
       inst-form)))
 
-(defn- strip-instrumentation-meta
-
-  "Remove all tags in order to reduce java bytecode size and enjoy cleaner code
-  printouts."
-
-  [form]
-  (utils/walk-code-form
-   (fn [_ f]
-     (if (or (symbol? f)
-             (seq? f))
-       (let [keys [::original-form ::coor]]
-         (inst-utils/strip-meta f keys))
-       f))
-   form))
-
 (defn- update-context-for-top-level-form
 
   "Set the context for instrumenting fn*s down the road."
@@ -810,7 +795,7 @@
 
           :else (instrument-form-recursively expanded-form ctx))
         inst-form-stripped (-> inst-form
-                               (strip-instrumentation-meta)
+                               (inst-utils/deep-strip-meta [::original-form ::coor])
                                (maybe-unwrap-outer-form-instrumentation ctx))]
     (cond-> {:inst-form inst-form-stripped}
       trace-form-init (assoc :init-forms
