@@ -805,7 +805,7 @@
             (println "Skipping variadic function definition since they aren't supported on ClojureScript yet." (:outer-orig-form ctx))
             expanded-form)
 
-          (and (= compiler :cljs) (inst-utils/expanded-cljs-multi-arity-defn? expanded-form ctx))
+          (and (= compiler :cljs) (inst-utils/expanded-cljs-multi-arity-defn? expanded-form))
           (instrument-cljs-multi-arity-defn expanded-form ctx)
 
           :else (instrument-form-recursively expanded-form ctx))

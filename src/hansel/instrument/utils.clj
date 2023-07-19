@@ -281,13 +281,23 @@
          (and (seq? x)
               (= (first x) 'fn*)))))
 
-(defn expanded-cljs-multi-arity-defn? [[x1 & xs] _]
-  (when (= x1 'do)
-    (let [[_ & xset] (keep first xs)]
-      (and (expanded-defn-form? (first xs))
-           (pos? (count xset))
-           (every? #{'set! 'do}
-                   (butlast xset))))))
+;; TODO: make all this simpler. I tried using pangloss/pattern everywhere
+;; which is amazing but it doesn't work in ClojureScript, and I don't want
+;; to bring it as a dep only for this functions.
+(defn expanded-cljs-multi-arity-defn? [form]
+  (when (seq? form)
+    (let [[x1 & xs] form]
+      (when (= x1 'do)
+        (let [xset-fms (doall (keep (fn [x]
+                                      (when (seq? x)
+                                        (first x)))
+                                    xs))]
+          (when (seq? xset-fms)
+            (let [[_ & xset] xset-fms]
+              (and (expanded-defn-form? (first xs))
+                   (pos? (count xset))
+                   (every? #{'set! 'do}
+                           (butlast xset))))))))))
 
 (defn expanded-cljs-variadic-defn? [form]
   (when (seq? form)

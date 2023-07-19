@@ -8,6 +8,8 @@
     
 ### Bugs fixed
 
+    - Fix a corner case issue on expanded-cljs-multi-arity-defn?
+
 ## 0.1.71 (06-07-2023)
 	
 ## New Features
