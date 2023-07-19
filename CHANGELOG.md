@@ -5,6 +5,14 @@
 ## New Features
     
 ### Changes
+            
+### Bugs fixed
+        
+## 0.1.74 (19-07-2023)
+	
+## New Features
+    
+### Changes
     
     - Skip specter path instrumentation
     
