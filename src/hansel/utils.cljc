@@ -49,8 +49,33 @@
               sum' (+ sum (* (int c) mul'))]
           (recur sum' mul' (inc i) srest))))))
 
-(defn- obj-coord [kind obj]
+(defn obj-coord [kind obj]
   (str kind (clojure-form-source-hash (pr-str obj))))
+
+(defn- get-form-at-coord*
+  ([form [cc & rcoord]] 
+   (if (nil? cc)
+     form
+     (if (number? cc)
+       (get-form-at-coord* (nth form cc) rcoord)
+
+       ;; if it is not a number is a string, so we assume we dig into maps or sets
+       (let [[_ k-or-v hash-str] (re-find #"(.)(.+)" cc)
+             ks (if (map? form) (keys form) form) ;; could be a map or a set
+             hash->keys (reduce (fn [r k]
+                                  (assoc r (str (clojure-form-source-hash (pr-str k))) k) )
+                                {}
+                                ks)
+             k (hash->keys hash-str)]
+         (if (= k-or-v "K")
+           (get-form-at-coord* k rcoord)
+           (get-form-at-coord* (get form k) rcoord)))))))
+
+(defn get-form-at-coord [form coord]
+  (try
+    (get-form-at-coord* form coord)
+    #?(:clj (catch Throwable _)
+       :cljs (catch js/Error _))))
 
 (defn walk-code-form
 
