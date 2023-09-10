@@ -44,7 +44,7 @@
        [cljs.analyzer/*cljs-ns* ns-symb
         cljs.env/*compiler* cenv]
        (let [file-str (slurp file-url)]
-         (doall (forms-seq (StringReader. file-str)))))
+         (doall (forms-seq (StringReader. file-str) file-url))))
       (catch Exception e
         (binding [*out* *err*]
           (println "Error reading forms for " file-url)
