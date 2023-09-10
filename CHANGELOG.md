@@ -8,6 +8,14 @@
             
 ### Bugs fixed
     
+## 0.1.78 (10-09-2023)
+	
+## New Features
+        
+### Changes
+            
+### Bugs fixed
+    
     - Fix ClojureScript cljc file instrumentation
     
 ## 0.1.76 (27-07-2023)
