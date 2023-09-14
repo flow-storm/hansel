@@ -2,6 +2,7 @@
   (:require [hansel.instrument.runtime]
             [cljs.core.match :refer-macros [match]]
             #?@(:clj [[hansel.utils :as utils]
+                      [hansel.instrument.utils :as inst-utils]
                       [hansel.instrument.forms :as inst-forms]])))
 
 ;; just for clj-kondo
@@ -20,7 +21,10 @@
                                :trace-fn-return 'hansel.instrument.test-utils/trace-fn-return
                                :trace-bind 'hansel.instrument.test-utils/trace-bind
                                :trace-expr-exec 'hansel.instrument.test-utils/trace-expr-exec
-                               :env env}
+                               :compiler (inst-utils/compiler-from-env env)
+                               ;; this is hacky, but just to make the forms/instrument assert pass
+                               ;; for tests
+                               :build-id :node-repl}
                               form))))
 
 #?(:clj

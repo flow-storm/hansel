@@ -85,6 +85,7 @@
 (deftest instrument-var-shadow-cljs
 
   (shadow-server/start!)
+
   (.start (Thread. (fn [] (shadow/node-repl))))
 
   ;; wait for the repl
@@ -143,16 +144,13 @@
                         :build-id :node-repl
                         :deep? true})]
       (is (= '#{hansel.instrument.tester/boo
-                hansel.instrument.tester/->ARecord
-                hansel.instrument.tester/add
-                hansel.instrument.tester/do-it
                 hansel.instrument.tester/multi-arity
                 hansel.instrument.tester/other-function
-                hansel.instrument.tester/sub}
+                hansel.instrument.tester/do-it}
              inst-set)
-          "Deep instrumentation should instrument all"))
+          "Deep instrumentation should instrument all")))
 
-    (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user})))
+    (shadow/cljs-eval :node-repl ":repl/quit" {:ns 'cljs.user}))
 
 (deftest clojure-full-tester-namespace-instrumentation
   (testing "Full tester namespaces instrumentation"

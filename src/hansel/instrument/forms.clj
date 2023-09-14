@@ -815,11 +815,17 @@
            (into [(instrument-expression-form (conj forms 'do) [] (assoc ctx :outer-form? true))]))))
 
 (defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind form-file form-line
-                                               trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
+                                               trace-form-init trace-fn-call trace-expr-exec trace-fn-return compiler build-id]}
+                                       form-ns form]
   (let [form-id (hash form)
-        compiler (inst-utils/compiler-from-env env)
         [macroexpand-1-fn expand-symbol] (case compiler
-                                           :cljs (let [cljs-macroexpand-1 (requiring-resolve 'cljs.analyzer/macroexpand-1)
+                                           :cljs (let [env (let [empty-env (requiring-resolve 'shadow.build.compiler/empty-env)
+                                                                 get-worker (requiring-resolve 'shadow.cljs.devtools.api/get-worker)
+                                                                 shadow-worker (get-worker build-id)
+                                                                 repl-state (-> shadow-worker :state-ref deref)]
+                                                             (empty-env repl-state form-ns))
+
+                                                       cljs-macroexpand-1 (requiring-resolve 'cljs.analyzer/macroexpand-1)
                                                        cljs-resolve (requiring-resolve 'cljs.analyzer.api/resolve)]
                                                    [(fn [form]
                                                       (cljs-macroexpand-1 env form))
@@ -832,8 +838,7 @@
                                                       (symbol v)
                                                       symb))])]
     (assert (or (nil? disable) (set? disable)) ":disable configuration should be a set")
-    {:environment       env
-     :tracing-disabled? tracing-disabled?
+    {:tracing-disabled? tracing-disabled?
      :compiler          compiler
      :orig-outer-form   form
      :form-id           form-id
@@ -896,12 +901,19 @@
   "Instrument a form for tracing.
   Returns a map with :inst-form and :init-forms."
 
-  [{:keys [env normalize-gensyms?] :as config} form]
+  [{:keys [normalize-gensyms?] :as config} form]
+
+  (assert (#{:clj :cljs} (:compiler config))
+          (str "Instrument config :compiler should be :clj or :cljs, current : " config))
+  (when (= :cljs (:compiler config))
+    (assert (keyword? (:build-id config))
+            (str "Instrument config should contain a :build-id for clojurescript. current : " config)))
+
   (let [form (if normalize-gensyms?
                (normalize-gensyms form)
                form)
         form-ns (or (:ns config) (str (ns-name *ns*)))
-        {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form env)
+        {:keys [macroexpand-1-fn expand-symbol] :as ctx} (build-form-instrumentation-ctx config form-ns form)
         tagged-form (utils/tag-form-recursively form ::coor)
         expanded-form (inst-utils/macroexpand-all macroexpand-1-fn expand-symbol tagged-form ::original-form)
         inst-result (instrument-top-level-form expanded-form ctx)]
@@ -909,10 +921,13 @@
     ;; Uncomment to debug
     ;; Printing on the *err* stream is important since
     ;; printing on standard output messes  with clojurescript macroexpansion
-    #_(let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (clojure.pprint/pprint x)))]
+
+    (when (and (seq? form)
+               (= 'extend-protocol (first form)))
+      (let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (clojure.pprint/pprint x)))]
         (pprint-on-err "Input form : " form)
         (pprint-on-err "Expanded form : " expanded-form)
-        (pprint-on-err "Instrumented form : " inst-result))
+        (pprint-on-err "Instrumented form : " inst-result)))
 
     (assoc inst-result
            :instrumented-fns (-> ctx :instrumented-fns deref))))

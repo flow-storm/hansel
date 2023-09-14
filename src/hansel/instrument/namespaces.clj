@@ -115,7 +115,7 @@
 
   ([ns-symb form {:keys [compiler uninstrument? eval-in-ns-fn] :as config} retrying?]
 
-   (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fns :verbose? :env :form-file :form-line
+   (let [inst-opts (select-keys config [:disable :excluding-ns :excluding-fns :verbose? :compiler :build-id :form-file :form-line
                                         :trace-form-init :trace-fn-call :trace-fn-return :trace-expr-exec :trace-bind])]
 
      (try

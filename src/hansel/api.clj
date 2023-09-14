@@ -24,7 +24,8 @@
   Check that one for params docs."
 
   [config form]
-  (let [{:keys [init-forms inst-form]} (inst-forms/instrument (assoc config :env &env) form)]
+  (let [config (assoc config :compiler (inst-utils/compiler-from-env &env))
+        {:keys [init-forms inst-form]} (inst-forms/instrument config form)]
     `(do ~@init-forms ~inst-form)))
 
 (defn- find-interesting-vars-references [resolve-fn-symb ns-symb form]
@@ -47,7 +48,8 @@
      @*instrumented-set))
 
   ([var-symb {:keys [deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
-   (let [ns-symb (symbol (namespace var-symb))
+   (let [config (assoc config :compiler :clj)
+         ns-symb (symbol (namespace var-symb))
          form-ns (find-ns ns-symb)]
      (log (format "Clojure re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (binding [*ns* form-ns]
@@ -116,7 +118,8 @@
   [namespaces-set config]
 
   (inst-ns/instrument-files-for-namespaces namespaces-set
-                                           (merge {:prefixes? true}
+                                           (merge {:prefixes? true
+                                                   :compiler :clj}
                                                   config
                                                   inst-ns/clj-namespaces-config)))
 
@@ -147,13 +150,12 @@
 
   ([var-symb {:keys [build-id deep? uninstrument? skip-namespaces] :as config} *instrumented-set]
 
-   (let [ns-symb (symbol (namespace var-symb))
+   (let [config (assoc config :compiler :cljs)
+         ns-symb (symbol (namespace var-symb))
          form (some->> (inst-utils/source-fn-cljs var-symb build-id)
                        (read-string {:read-cond :allow}))
          compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
-         empty-env (requiring-resolve 'cljs.analyzer/empty-env)
-         cenv (compiler-env build-id)
-         aenv (empty-env)]
+         cenv (compiler-env build-id)]
      (log (format "Shadow re-evaluating var: %s deep?: %s instrument?: %s" var-symb deep? (not uninstrument?)))
      (if form
        #_:clj-kondo/ignore
@@ -163,14 +165,14 @@
                                (inst-ns/re-eval-form ns-symb
                                                      form
                                                      (merge inst-ns/shadow-cljs-namespaces-config
-                                                            config
-                                                            {:env aenv})))
+                                                            config)))
            (catch Exception e (log-error (format "Error re-evaluating %s" var-symb) e)))
          (swap! *instrumented-set conj var-symb)
 
          (when deep?
            (let [skip-namespaces (into #{"cljs.core"} skip-namespaces) ;; always skip cljs.core on deep instrumentation
                  resolve-fn-symb (fn resolve-fn-symb [ns-symb symb]
+
                                    (let [cljs-ns (-> (compiler-env build-id)
                                                      :cljs.analyzer/namespaces
                                                      (get ns-symb))]
@@ -180,12 +182,16 @@
                                          (when symb-ns
                                            (symbol (name symb-ns) (name symb))))
 
-                                       ;; el if it doesn't have an alias lets check defs
+                                       ;; else if it doesn't have an alias lets check defs
                                        (let [ns-defs (:defs cljs-ns)
                                              protocol-symbol? (get-in ns-defs [symb :meta :protocol-symbol])
+                                             protocol-fn? (get-in ns-defs [symb :meta :protocol])
+                                             internal-ctor? (get-in ns-defs [symb :meta :internal-ctor])
                                              type? (get-in ns-defs [symb :type])]
                                          (when (and (contains? ns-defs symb)
                                                     (not protocol-symbol?)
+                                                    (not protocol-fn?)
+                                                    (not internal-ctor?)
                                                     (not type?))
                                            (symbol (name ns-symb) (name symb)))))))
                  sub-vars (cond->> (find-interesting-vars-references resolve-fn-symb ns-symb form)
@@ -218,13 +224,11 @@
   [namespaces-set {:keys [build-id] :as config}]
 
   (let [compiler-env (requiring-resolve 'shadow.cljs.devtools.api/compiler-env)
-        empty-env (requiring-resolve 'cljs.analyzer/empty-env)
-        cenv (compiler-env build-id)
-        aenv (empty-env)]
+        cenv (compiler-env build-id)]
     (utils/lazy-binding [cljs.env/*compiler* (atom cenv)]
                         (inst-ns/instrument-files-for-namespaces namespaces-set
                                                                  (merge {:prefixes? true
-                                                                         :env aenv}
+                                                                         :compiler :cljs}
                                                                         config
                                                                         inst-ns/shadow-cljs-namespaces-config)))))
 
