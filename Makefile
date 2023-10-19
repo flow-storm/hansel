@@ -18,7 +18,7 @@ hansel.jar:
 	clj -T:build jar
 
 install: hansel.jar
-	mvn install:install-file -Dfile=target/hansel.jar -DpomFile=target/classes/META-INF/maven/com.github.jpmonettas/hansel/pom.xml
+	mvn install:install-file -Dfile=target/hansel.jar -DpomFile=target/classes/META-INF/maven/com.github.flow-storm/hansel/pom.xml
 
 deploy:
-	mvn deploy:deploy-file -Dfile=target/hansel.jar -DrepositoryId=clojars -DpomFile=target/classes/META-INF/maven/com.github.jpmonettas/hansel/pom.xml -Durl=https://clojars.org/repo
+	mvn deploy:deploy-file -Dfile=target/hansel.jar -DrepositoryId=clojars -DpomFile=target/classes/META-INF/maven/com.github.flow-storm/hansel/pom.xml -Durl=https://clojars.org/repo

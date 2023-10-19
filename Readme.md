@@ -7,7 +7,7 @@ Hansel allows you to instrument Clojure[Script] forms and entire namespaces, so 
 
 It is ment as a platform to build tooling that depends on code instrumentation, like debuggers.
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.github.jpmonettas/hansel.svg)](https://clojars.org/com.github.jpmonettas/hansel)
+[![Clojars Project](https://img.shields.io/clojars/v/com.github.flow-storm/hansel.svg)](https://clojars.org/com.github.flow-storm/hansel)
 
 ## Clojure QuickStart
 

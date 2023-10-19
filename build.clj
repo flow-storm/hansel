@@ -10,7 +10,7 @@
 
 (defn jar [_]
   (clean nil)
-  (let [lib 'com.github.jpmonettas/hansel
+  (let [lib 'com.github.flow-storm/hansel
         version (format "0.1.%s" (b/git-count-revs nil))
         basis (b/create-basis {:project "deps.edn"
                                :aliases []})
@@ -20,7 +20,11 @@
                   :lib lib
                   :version version
                   :basis basis
-                  :src-dirs src-dirs})
+                  :src-dirs src-dirs
+                  :pom-data [[:licenses
+                              [:license
+                               [:name "Unlicense"]
+                               [:url "http://unlicense.org/"]]]]})
     (b/copy-dir {:src-dirs src-dirs
                  :target-dir class-dir})
     (b/jar {:class-dir class-dir
