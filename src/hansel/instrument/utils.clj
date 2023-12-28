@@ -263,7 +263,7 @@
             (with-open [rdr (LineNumberingPushbackReader. (InputStreamReader. strm))]
               (loop [prev-line (.getLineNumber rdr)]
                 (let [form (binding [*ns* var-ns]
-                             (read rdr))
+                             (read {:read-cond :allow} rdr))
                       new-line (.getLineNumber rdr)]
                   (if (<= prev-line var-def-line new-line)
                     form
