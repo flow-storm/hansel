@@ -7,6 +7,16 @@
 ### Changes
             
 ### Bugs fixed
+
+## 0.1.81 (28-12-2023)
+	
+## New Features
+        
+### Changes
+            
+### Bugs fixed
+
+    - Fix hansel.instrument.utils/source-form for cljc files
     
 ## 0.1.78 (10-09-2023)
 	
