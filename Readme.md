@@ -28,6 +28,9 @@ It is ment as a platform to build tooling that depends on code instrumentation, 
   (println "[fn-return] data:" data)
   return) ;; must return return!
 
+(defn print-fn-unwind [data]
+  (println "[fn-unwind] data:" data))
+  
 (defn print-expr-exec [{:keys [result] :as data}]
   (println "[expr-exec] data:" data)
   result) ;; must return result!
@@ -50,6 +53,7 @@ It is ment as a platform to build tooling that depends on code instrumentation, 
 (hansel/instrument {:trace-form-init dev/print-form-init
                     :trace-fn-call dev/print-fn-call
                     :trace-fn-return dev/print-fn-return
+                    :trace-fn-unwind dev/print-fn-unwind
                     :trace-expr-exec dev/print-expr-exec
                     :trace-bind dev/print-bind}
                    (defn foo [a b] (+ a b)))
@@ -78,6 +82,7 @@ It is ment as a platform to build tooling that depends on code instrumentation, 
                                     '{:trace-form-init dev/print-form-init
                                       :trace-fn-call dev/print-fn-call
                                       :trace-fn-return dev/print-fn-return
+                                      :trace-fn-unwind dev/print-fn-unwind
                                       :trace-expr-exec dev/print-expr-exec
                                       :trace-bind dev/print-bind
 									  :prefixes? false})
@@ -94,6 +99,7 @@ You can instrument any var by using `hansel/instrument-var-clj` like this :
    '{:trace-form-init dev/print-form-init
      :trace-fn-call dev/print-fn-call
      :trace-fn-return dev/print-fn-return
+     :trace-fn-unwind dev/print-fn-unwind
      :trace-expr-exec dev/print-expr-exec
      :trace-bind dev/print-bind
      :deep? true}) ;; deep? is nil by default
@@ -132,6 +138,7 @@ shadow.user> (hansel/instrument-namespaces-shadow-cljs
                 '{:trace-form-init cljs.user/print-form-init
                   :trace-fn-call cljs.user/print-fn-call
                   :trace-fn-return cljs.user/print-fn-return
+                  :trace-fn-unwind cljs.user/print-fn-unwind
                   :trace-expr-exec cljs.user/print-expr-exec
                   :trace-bind cljs.user/print-bind
                   :build-id :browser-repl}) ;; <- need to provide your shadow app build-id

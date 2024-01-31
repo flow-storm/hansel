@@ -238,14 +238,12 @@
     (cons inst-bindings-vec
           inst-body)))
 
-(defn- instrument-extend-type-fn-arity-body [arity-body-forms outer-preamble form-ns fn-trace-name ctx]
+(defn- instrument-extend-type-fn-arity-body [arity-body-forms outer-preamble ctx]
   (if (:extending-basic-type? ctx)
     ;; Extending a basic type (number, string, ...)
     (instrument-outer-form ctx
                            (instrument-coll arity-body-forms ctx)
-                           outer-preamble
-                           form-ns
-                           fn-trace-name)
+                           outer-preamble)
 
     ;; Else we are extending a user defined type
     ;; All this nonsense is because inside type functions `this` behaves weirdly
@@ -257,9 +255,7 @@
     (let [[_ _ & this-inner-forms] (first arity-body-forms)
           inst-this-inner (instrument-outer-form ctx
                                                  (instrument-coll this-inner-forms ctx)
-                                                 outer-preamble
-                                                 form-ns
-                                                 fn-trace-name)]
+                                                 outer-preamble)]
       `(let* [~'this (~'js* "this")]
          ~inst-this-inner))))
 
@@ -271,6 +267,7 @@
   (let [unnamed-fn? (nil? (:trace-name fn-ctx))
         inner-fn? (= :anonymous (:kind fn-ctx))
         fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
+        coor (-> arity meta ::coor)
         fn-args (expanded-fn-args-vec-symbols arity-args-vec)
         outer-preamble (if trace-fn-call
                          (-> []
@@ -311,15 +308,13 @@
                                ;; check the comments of `instrument-extend-type-fn-arity-body` for more details
                                (and (= :cljs compiler)
                                     (#{:extend-type} (:kind fn-ctx)))
-                               (instrument-extend-type-fn-arity-body arity-body-forms outer-preamble form-ns fn-trace-name ctx')
+                               (instrument-extend-type-fn-arity-body arity-body-forms outer-preamble ctx')
 
                                ;; else instrument fn body
                                :else
                                (instrument-outer-form ctx'
                                                       (instrument-coll arity-body-forms ctx')
-                                                      outer-preamble
-                                                      form-ns
-                                                      fn-trace-name))]
+                                                      outer-preamble))]
     (-> `(~arity-args-vec ~inst-arity-body-form)
         (utils/merge-meta (meta arity)))))
 
@@ -809,13 +804,20 @@
 
 (defn- instrument-outer-form
   "Add some special instrumentation that is needed only on the outer form."
-  [ctx forms preamble _ _]
-  `(do
-     ~@(-> preamble
-           (into [(instrument-expression-form (conj forms 'do) [] (assoc ctx :outer-form? true))]))))
+  [{:keys [form-id compiler trace-fn-unwind] :as ctx} forms preamble]
+  (let [storm-error (gensym "storm-error")
+        unwind-report-expr (when trace-fn-unwind
+                             `(~trace-fn-unwind {:form-id   ~form-id
+                                                 :throwable ~storm-error}))]
+    `(try
+       ~@(-> preamble
+             (into [(instrument-expression-form (conj forms 'do) [] (assoc ctx :outer-form? true))]))
+       (catch ~(case compiler :clj 'Throwable :cljs :default) ~storm-error
+         ~unwind-report-expr
+         (throw ~storm-error)))))
 
 (defn- build-form-instrumentation-ctx [{:keys [disable excluding-fns tracing-disabled? trace-bind form-file form-line
-                                               trace-form-init trace-fn-call trace-expr-exec trace-fn-return]} form-ns form env]
+                                               trace-form-init trace-fn-call trace-expr-exec trace-fn-return trace-fn-unwind]} form-ns form env]
   (let [form-id (hash form)
         compiler (inst-utils/compiler-from-env env)
         [macroexpand-1-fn expand-symbol] (case compiler
@@ -846,6 +848,7 @@
      :trace-form-init trace-form-init
      :trace-fn-call   trace-fn-call
      :trace-fn-return trace-fn-return
+     :trace-fn-unwind trace-fn-unwind
      :trace-expr-exec trace-expr-exec
      :trace-bind      trace-bind
 

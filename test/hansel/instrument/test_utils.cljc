@@ -9,8 +9,13 @@
 (declare trace-form-init)
 (declare trace-fn-call)
 (declare trace-fn-return)
+(declare trace-fn-unwind)
 (declare trace-bind)
 (declare trace-expr-exec)
+
+(defn normalize-error-objects [x]
+  #?(:clj  (if (instance? Exception x) [:error (.getMessage x)] x)
+     :cljs (if (instance? js/Error  x) [:error (.-message x)]   x)))
 
 #?(:clj
    (defmacro instrument [form]     
@@ -18,6 +23,7 @@
        (inst-forms/instrument {:trace-form-init 'hansel.instrument.test-utils/trace-form-init
                                :trace-fn-call 'hansel.instrument.test-utils/trace-fn-call
                                :trace-fn-return 'hansel.instrument.test-utils/trace-fn-return
+                               :trace-fn-unwind 'hansel.instrument.test-utils/trace-fn-unwind
                                :trace-bind 'hansel.instrument.test-utils/trace-bind
                                :trace-expr-exec 'hansel.instrument.test-utils/trace-expr-exec
                                :env env}
@@ -40,10 +46,11 @@
             (clojure.test/testing ~tdesc
               (let [~collected-traces-symb (atom [])]
                 (with-redefs [hansel.instrument.test-utils/trace-form-init (fn [data#] (swap! ~collected-traces-symb conj [:trace-form-init data#]))
-                              hansel.instrument.test-utils/trace-fn-call (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-call data#]) )
+                              hansel.instrument.test-utils/trace-fn-call (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-call data#]))
                               hansel.instrument.test-utils/trace-fn-return (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-return data#]) (:return data#))
+                              hansel.instrument.test-utils/trace-fn-unwind (fn [data#] (swap! ~collected-traces-symb conj [:trace-fn-unwind (update data# :throwable ex-message)]))
                               hansel.instrument.test-utils/trace-bind (fn [data#] (swap! ~collected-traces-symb conj [:trace-bind data#]))
-                              hansel.instrument.test-utils/trace-expr-exec (fn [data#] (swap! ~collected-traces-symb conj [:trace-expr-exec data#]) (:result data#))]
+                              hansel.instrument.test-utils/trace-expr-exec (fn [data#] (swap! ~collected-traces-symb conj [:trace-expr-exec (update data# :result normalize-error-objects)]) (:result data#))]
 
                   (instrument ~form)
                   

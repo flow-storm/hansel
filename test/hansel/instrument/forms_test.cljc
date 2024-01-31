@@ -108,6 +108,26 @@
             [:trace-expr-exec {:coor [3], :result [2 3 4], :form-id -143162624}]
             [:trace-fn-return {:return [2 3 4], :form-id -143162624}]])
 
+(def-instrumentation-test uncatched-fn-test "Test function unwinding tracing"
+
+  :form (defn uncatched-throw []
+          (let [f (fn []
+                    (throw (ex-info "Dang" {})))]
+            (f)))
+  :run-form (try
+              (uncatched-throw)
+              #?(:clj (catch Exception _ :throwed)
+                 :cljs (catch js/Error _ :throwed)))
+  :should-return :throwed
+  ;; :print-collected? true
+  :tracing [[:trace-form-init {:form-id 1143238905, :form #eq-guard '(defn uncatched-throw [] (let [f (fn [] (throw (ex-info "Dang" {})))] (f))), :ns "hansel.instrument.forms-test", :def-kind :defn, :file nil, :line nil}]
+            [:trace-fn-call {:form-id 1143238905, :ns "hansel.instrument.forms-test", :fn-name "uncatched-throw", :unnamed-fn? false, :inner-fn? false, :fn-args []}]
+            [:trace-bind {:val (_ :guard any?), :coor [3], :symb 'f, :form-id 1143238905}]
+            [:trace-fn-call {:form-id 1143238905, :ns "hansel.instrument.forms-test", :fn-name (_ :guard fn-str?), :unnamed-fn? true, :inner-fn? true, :fn-args []}]
+            [:trace-expr-exec {:coor [3 1 1 2 1], :result [:error "Dang"], :form-id 1143238905}]
+            [:trace-fn-unwind {:form-id 1143238905, :throwable "Dang"}]
+            [:trace-fn-unwind {:form-id 1143238905, :throwable "Dang"}]])
+
 
 
 (def-instrumentation-test big-maps-and-sets-test "Test instrumentation of maps with more than 8 keys and sets"
@@ -126,7 +146,7 @@
                  :x #{(+ 1 2) (+ 3 4) (+ 5 6) (+ 1 1 (* 2 2))}))
   :run-form (big-maps-and-sets-fn)
   :should-return {7 14, 1 2, 4 8, 6 12, 3 6, 2 4, 9 18, 5 10, :x #{7 6 3 11}, 8 16, 84 84}
-  :print-collected? true  
+  ;;:print-collected? true  
   :unsorted-tracing #{[:trace-form-init {:form-id 1936427945, :form '(defn big-maps-and-sets-fn [] (assoc {7 (+ 7 7), 1 (+ 1 1), 4 (+ 4 4), (+ 42 42) 84, 6 (+ 6 6), 3 (+ 3 3), 2 (+ 2 2), 9 (+ 9 9), 5 (+ 5 5), 8 (+ 8 8)} :x #{(+ 1 2) (+ 1 1 (* 2 2)) (+ 5 6) (+ 3 4)})), :ns "hansel.instrument.forms-test", :def-kind :defn, :file nil, :line nil}]
                       [:trace-fn-call {:form-id 1936427945, :ns "hansel.instrument.forms-test", :fn-name "big-maps-and-sets-fn", :unnamed-fn? false, :inner-fn? false, :fn-args []}]
                       [:trace-expr-exec {:coor [3 1 "V55"], :result 14, :form-id 1936427945}]
