@@ -8,11 +8,13 @@
             
 ### Bugs fixed
 
-## 0.1.85 (unreleased)
+## 0.1.87 (01-09-2025)
 	
 ## New Features
         
 ### Changes
+
+    - Throw instead of logging if a var source isn't found
             
 ### Bugs fixed
 
