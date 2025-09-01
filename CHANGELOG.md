@@ -8,6 +8,16 @@
             
 ### Bugs fixed
 
+## 0.1.85 (unreleased)
+	
+## New Features
+        
+### Changes
+            
+### Bugs fixed
+
+    - Fixed exceptions tracing for all instrumentation but the #trace tag one which already worked
+
 ## 0.1.81 (28-12-2023)
 	
 ## New Features
