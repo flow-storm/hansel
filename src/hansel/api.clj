@@ -86,7 +86,7 @@
                      (when-not (contains? @*instrumented-set sub-var-symb)
                        (instrument-var-clj sub-var-symb config *instrumented-set)))))))
 
-           (log (format "Couldn't find source for %s" var-symb))))))))
+           (throw (ex-info "Couldn't find source" {:var-symb var-symb}))))))))
 
 (defn uninstrument-var-clj
 
@@ -195,7 +195,7 @@
                  (when-not (contains? @*instrumented-set sub-var-symb)
                    (instrument-var-shadow-cljs sub-var-symb config *instrumented-set)))))))
 
-       (println (format "Couldn't find source for %s" var-symb))))))
+       (throw (ex-info "Couldn't find source" {:var-symb var-symb}))))))
 
 (defn uninstrument-var-shadow-cljs
 
