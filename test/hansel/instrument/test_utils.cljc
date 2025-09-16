@@ -19,15 +19,19 @@
 
 #?(:clj
    (defmacro instrument [form]     
-     (let [env &env]
-       (inst-forms/instrument {:trace-form-init 'hansel.instrument.test-utils/trace-form-init
-                               :trace-fn-call 'hansel.instrument.test-utils/trace-fn-call
-                               :trace-fn-return 'hansel.instrument.test-utils/trace-fn-return
-                               :trace-fn-unwind 'hansel.instrument.test-utils/trace-fn-unwind
-                               :trace-bind 'hansel.instrument.test-utils/trace-bind
-                               :trace-expr-exec 'hansel.instrument.test-utils/trace-expr-exec
-                               :env env}
-                              form))))
+     (let [env &env
+           {:keys [inst-form init-forms]}
+           (inst-forms/instrument {:trace-form-init 'hansel.instrument.test-utils/trace-form-init
+                                   :trace-fn-call 'hansel.instrument.test-utils/trace-fn-call
+                                   :trace-fn-return 'hansel.instrument.test-utils/trace-fn-return
+                                   :trace-fn-unwind 'hansel.instrument.test-utils/trace-fn-unwind
+                                   :trace-bind 'hansel.instrument.test-utils/trace-bind
+                                   :trace-expr-exec 'hansel.instrument.test-utils/trace-expr-exec
+                                   :env env}
+                                  form)]
+       `(do
+          ~inst-form
+          ~init-forms))))
 
 #?(:clj
    (defmacro def-instrumentation-test [tname tdesc & {:keys [form print-collected? run-form should-return tracing unsorted-tracing]}]

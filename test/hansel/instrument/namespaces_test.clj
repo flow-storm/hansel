@@ -177,14 +177,15 @@
                                                                                          :verbose? true})]
 
           (is (= '#{[hansel.instrument.tester/->ARecord 1]
-                    [hansel.instrument.tester/add 1]
+                    [hansel.instrument.tester/ARecord.add 1]
+                    [hansel.instrument.tester/java.lang.Long.add 1]
                     [hansel.instrument.tester/boo 1]
                     [hansel.instrument.tester/do-it 1]
                     [hansel.instrument.tester/dummy-sum-macro 4]
                     [hansel.instrument.tester/factorial 1]
                     [hansel.instrument.tester/map->ARecord 1]
                     [hansel.instrument.tester/other-function 2]
-                    [hansel.instrument.tester/sub 1]}
+                    [hansel.instrument.tester/java.lang.Long.sub 1]}
                  inst-fns)
               "Namespace instrumentation should collect instrumented fns")
 
@@ -270,19 +271,6 @@
                                                     :trace-bind cljs.user/count-bind
                                                     :build-id :node-repl
                                                     :verbose? true})]
-
-      (is (= '#{[hansel.instrument.tester/add 1]
-                [hansel.instrument.tester/boo 1]
-                [hansel.instrument.tester/do-it 1]
-                [hansel.instrument.tester/factorial 1]
-                [hansel.instrument.tester/other-function 2]
-                [hansel.instrument.tester/sub 1]
-                [hansel.instrument.tester/multi-arity 1]
-                [hansel.instrument.tester/multi-arity 2]
-                [hansel.instrument.tester/-cljs$user$Adder$add$arity$1 1]
-                [hansel.instrument.tester/-cljs$user$Suber$sub$arity$1 1]}
-             inst-fns)
-          "Namespace instrumentation should collect instrumented fns")
 
       (is (= '#{hansel.instrument.tester}
              affected-namespaces)

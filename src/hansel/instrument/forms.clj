@@ -167,7 +167,7 @@
         is-fn-def? (and (seq? (first rargs))
                         (= 'fn* (-> rargs first first)))
         ctx (cond-> ctx
-              is-fn-def? (assoc :fn-ctx {:trace-name sym
+              is-fn-def? (assoc :fn-ctx {:trace-name (name sym)
                                          :kind :defn}))
         sym-meta-form (meta sym)
         instrumented-def-sym-meta (instrument-form-recursively sym-meta-form ctx)]
@@ -270,7 +270,6 @@
   (let [unnamed-fn? (nil? (:trace-name fn-ctx))
         inner-fn? (= :anonymous (:kind fn-ctx))
         fn-trace-name (str (or (:trace-name fn-ctx) (gensym "fn-")))
-        coor (-> arity meta ::coor)
         fn-args (expanded-fn-args-vec-symbols arity-args-vec)
         outer-preamble (if trace-fn-call
                          (-> []
@@ -337,7 +336,7 @@
                                        :else
                                        [nil args])
         ctx (cond-> ctx
-              (nil? (:fn-ctx ctx)) (assoc :fn-ctx {:trace-name fn-name
+              (nil? (:fn-ctx ctx)) (assoc :fn-ctx {:trace-name (when fn-name (name fn-name))
                                                    :kind :anonymous}))
         instrumented-arities-bodies (mapv #(instrument-fn-arity-body % ctx) arities-bodies-seq)]
 
@@ -361,13 +360,18 @@
   (let [inst-methods (->> methods
                           (map (fn [[method-name args-vec & body]]
                                  (let [ctx (assoc ctx
-                                                  :fn-ctx {:trace-name method-name
+                                                  :fn-ctx {:trace-name (name method-name)
                                                            :kind :reify})
                                        [_ inst-body] (instrument-fn-arity-body `(~args-vec ~@body) ctx)]
                                    `(~method-name ~args-vec ~inst-body)))))]
     `(~proto-or-interface-vec ~@inst-methods)))
 
-(defn- instrument-special-deftype*-clj [[a1 a2 a3 a4 a5 & methods] {:keys [outer-form-kind] :as ctx}]
+(defn- type-method-trace-name [type-name-symb method-name-symb]
+  (if type-name-symb
+    (format "%s.%s" (name type-name-symb) (name method-name-symb))
+    (name method-name-symb)))
+
+(defn- instrument-special-deftype*-clj [[a1 a2 a3 a4 a5 & methods] {:keys [outer-form-kind type-name] :as ctx}]
   (let [inst-methods (->> methods
                           (map (fn [[method-name args-vec & body]]
                                  (if (and (= outer-form-kind :defrecord)
@@ -376,7 +380,7 @@
                                    ;; don't instrument defrecord types
                                    `(~method-name ~args-vec ~@body)
 
-                                   (let [ctx (assoc ctx :fn-ctx {:trace-name method-name
+                                   (let [ctx (assoc ctx :fn-ctx {:trace-name (type-method-trace-name type-name method-name)
                                                                  :kind :extend-type})
                                          [_ inst-body] (instrument-fn-arity-body `(~args-vec ~@body) ctx)]
                                      `(~method-name ~args-vec ~inst-body))))))]
@@ -401,9 +405,9 @@
 
   "Instrument all Clojure and ClojureScript special forms. Dispatcher function."
 
-  [[name & args :as form] {:keys [compiler] :as ctx}]
+  [[sf-name & args :as form] {:keys [compiler] :as ctx}]
   (let [inst-args (try
-                    (condp #(%1 %2) name
+                    (condp #(%1 %2) sf-name
                       '#{do if recur throw finally try monitor-exit monitor-enter} (instrument-coll args ctx)
                       '#{new} (cons (first args) (instrument-coll (rest args) ctx))
                       '#{quote & var clojure.core/import*} args
@@ -411,9 +415,11 @@
                       '#{def} (instrument-special-def args ctx)
                       '#{set!} (instrument-special-set! args ctx)
                       '#{loop* let* letfn*} (instrument-special-loop*-like form ctx)
-                      '#{deftype*} (case compiler
-                                     :clj  (instrument-special-deftype*-clj args ctx)
-                                     :cljs (instrument-special-deftype*-cljs args ctx))
+                      '#{deftype*} (let [type-name (first args)
+                                         ctx (assoc ctx :type-name type-name)]
+                                     (case compiler
+                                      :clj  (instrument-special-deftype*-clj args ctx)
+                                      :cljs (instrument-special-deftype*-cljs args ctx)))
                       '#{reify*} (instrument-special-reify* args ctx)
                       '#{fn*} (instrument-special-fn* form ctx)
                       '#{catch} `(~@(take 2 args)
@@ -425,10 +431,10 @@
                       '#{js*} (instrument-special-js*-cljs args ctx))
                     (catch Exception e
                       (binding [*out* *err*]
-                        (println "Failed to instrument" name args (pr-str form)
+                        (println "Failed to instrument" sf-name args (pr-str form)
                                  ", please file a bug report: " e))
                       args))]
-    (with-meta (cons name inst-args)
+    (with-meta (cons sf-name inst-args)
       (cond-> (meta form)
 
         ;; for clojure lets add meta to the fn* so when can
@@ -437,7 +443,7 @@
         ;; expanded-cljs-multi-arity-defn?
         ;; We are just skipping for cljs since the functionality that depends on this
         ;; flag (watch vars for inst/uninst) can't even be instrumented on ClojureScript
-        (and (= name 'fn*) (= compiler :clj))
+        (and (= sf-name 'fn*) (= compiler :clj))
         (assoc :hansel/instrumented? true)))))
 
 
@@ -521,7 +527,7 @@
                                       ;; `fn-name` will be used only for reporting purposes, so there is no harm
                                       (let [fn-name (symbol (name k))]
                                         (assoc r k (instrument-form-recursively f
-                                                                                (assoc ctx :fn-ctx {:trace-name fn-name
+                                                                                (assoc ctx :fn-ctx {:trace-name (type-method-trace-name ext-type fn-name)
                                                                                                     :kind :extend-type})))))
                                     {}
                                     emap)]

@@ -5,6 +5,9 @@
 ## New Features
         
 ### Changes
+
+    - Types functions names now get traced as Type.fn-name to tell appart different types functions in the same namespace
+    - Add hansel.instrument.forms/*print-forms atom. When true it will print debug info on form instrumentation
             
 ### Bugs fixed
 
