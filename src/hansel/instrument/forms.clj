@@ -12,6 +12,7 @@
   (:require
    [clojure.walk :as walk]
    [clojure.string :as str]
+   [clojure.pprint :as pp]
    [hansel.instrument.runtime :refer [*runtime-ctx*]]
    [hansel.utils :as utils]
    [hansel.instrument.utils :as inst-utils]))
@@ -24,6 +25,8 @@
 (declare macroexpand-all)
 
 (def clojure-script-basic-type '#{default nil object boolean number string array function})
+
+(def *print-forms (atom false))
 
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Instrumentation ;;
@@ -909,13 +912,13 @@
         expanded-form (inst-utils/macroexpand-all macroexpand-1-fn expand-symbol tagged-form ::original-form)
         inst-result (instrument-top-level-form expanded-form ctx)]
 
-    ;; Uncomment to debug
     ;; Printing on the *err* stream is important since
     ;; printing on standard output messes  with clojurescript macroexpansion
-    #_(let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (clojure.pprint/pprint x)))]
+    (when @*print-forms
+      (let [pprint-on-err (fn [msg x] (binding [*out* *err*] (println msg) (pp/pprint x)))]
         (pprint-on-err "Input form : " form)
         (pprint-on-err "Expanded form : " expanded-form)
-        (pprint-on-err "Instrumented form : " inst-result))
+        (pprint-on-err "Instrumented form : " inst-result)))
 
     (assoc inst-result
            :instrumented-fns (-> ctx :instrumented-fns deref))))

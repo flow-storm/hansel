@@ -26,8 +26,8 @@
 
            ;; run with clj -X:test:test-clj:clofidence
            :clofidence {:classpath-overrides {org.clojure/clojure nil}
-                        :extra-deps {com.github.flow-storm/clojure {:mvn/version "1.12.0-rc1"}
-                                     com.github.flow-storm/clofidence {:mvn/version "0.4.0"}}
+                        :extra-deps {com.github.flow-storm/clojure {:mvn/version "1.12.0-9"}
+                                     com.github.flow-storm/clofidence {:mvn/version "0.4.1"}}
                         :exec-fn clofidence.main/run
                         :exec-args {:report-name "Hansel"
                                     :test-fn cognitect.test-runner.api/test
