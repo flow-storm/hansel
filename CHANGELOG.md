@@ -6,6 +6,8 @@
         
 ### Changes
 
+    - tag-form-recursively now also tags maps, vectors and sets with coord
+
 ### Bugs fixed
 
 ## 0.1.90 (16-09-2025)

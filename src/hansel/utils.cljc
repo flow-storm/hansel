@@ -122,7 +122,10 @@
   [form key]  
   (walk-code-form (fn [coor frm]
                     (if (or (symbol? frm)
-                            (seq? frm))
+                            (seq? frm)
+                            (map? frm)
+                            (vector? frm)
+                            (set? frm))
                       (merge-meta frm {key coor})
                       frm))
                   form))
